@@ -21,7 +21,9 @@ if not exist node_modules (
 )
 
 echo.
-echo Starting Hiyo... keep this window open. Press Ctrl+C to stop.
-start "" http://localhost:3000
+echo Starting Hiyo... your browser opens by itself when it is ready.
+echo Keep this window open while you use the site. Press Ctrl+C to stop.
+echo.
+set OPEN_BROWSER=1
 call npm start
 pause
