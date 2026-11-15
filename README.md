@@ -45,7 +45,22 @@ Monkey, rebuilt for a worldwide audience with safety, speed and 12 languages fro
 
 ## Quick start
 
-Requires **Node.js 20.11+**.
+Requires **Node.js 20.11+** (check with `node -v`).
+
+**1. Get the code.** Until it's merged into `main`, the app lives on the `claude/beautiful-volta-k7nkqw` branch:
+
+```bash
+git clone -b claude/beautiful-volta-k7nkqw https://github.com/Amartyyaaa/live-cam.git
+```
+
+```bash
+cd live-cam
+```
+
+No Git? On GitHub switch to that branch, click **Code → Download ZIP**, unzip it, and open a terminal *inside*
+the unzipped folder.
+
+**2. Install and start — inside the project folder** (the one that contains `package.json`):
 
 ```bash
 npm install
@@ -54,6 +69,10 @@ npm install
 ```bash
 npm start
 ```
+
+> **Windows:** running `npm install` anywhere else — e.g. directly in `C:\Users\<you>` — fails with
+> `EPERM: operation not permitted`. Keep the project in a plain folder such as `C:\dev\live-cam`
+> (OneDrive-synced folders and antivirus "controlled folder access" can also block npm).
 
 Open http://localhost:3000 in two different browsers (or one normal + one private window) and click **Start video chat** in both.
 Cameras need a secure context: `localhost` works; anything else needs **HTTPS**.
