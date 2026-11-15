@@ -1,14 +1,15 @@
-// The chat room.
+// The chat room. Opened from the lobby, it starts searching straight away;
+// "Stop" goes back to the lobby.
 //
 // States (mirrored on #chat-layout[data-state] so CSS can react):
-//   idle        nothing happening; "Start" button
+//   idle        nothing happening (e.g. after a reconnect); "Start" button
 //   searching   waiting in the queue
 //   connecting  matched, WebRTC handshake in progress (video mode)
 //   connected   chatting
 //   ended       the stranger left; auto-next kicks in unless disabled
 
 import { config, countryName, flagEmoji, formatList, interestLabel, t } from './i18n.js';
-import { listDevices, mediaErrorKind, mediaSupported, openCamera, openLocalMedia, openMic, stopStream } from './media.js';
+import { listDevices } from './media.js';
 import { request } from './net.js';
 import { Peer } from './peer.js';
 import { prefs } from './prefs.js';
@@ -26,14 +27,18 @@ const finePointer = () => window.matchMedia?.('(pointer: fine)').matches ?? true
 const coarsePointer = () => window.matchMedia?.('(pointer: coarse)').matches ?? false;
 
 export class Chat {
-  /** @param {{ socket: import('socket.io-client').Socket, onLeave: () => void }} opts */
-  constructor({ socket, onLeave }) {
+  /**
+   * @param {{ socket: import('socket.io-client').Socket, camera: import('./camera.js').Camera,
+   *           onLeave: () => void, onAuthNeeded: () => void }} opts
+   */
+  constructor({ socket, camera, onLeave, onAuthNeeded }) {
     this.socket = socket;
+    this.camera = camera;
     this.onLeave = onLeave;
+    this.onAuthNeeded = onAuthNeeded;
     this.state = 'idle';
     this.mode = 'video';
     this.search = { interests: [], langOnly: false };
-    this.stream = null;
     this.peer = null;
     this.pairId = null;
     this.partner = null;
@@ -43,8 +48,6 @@ export class Chat {
     this.blurred = false;
     this.typingSent = false;
     this.resumeOnReconnect = false;
-    this.starting = false;
-    this.session = 0; // bumps on close(), cancels in-flight async work
     this.timers = {};
     this.baseTitle = null;
 
@@ -85,10 +88,6 @@ export class Chat {
       micSelect: id('mic-select'),
       blurToggle: id('blur-toggle'),
       autoNextToggle: id('autonext-toggle'),
-      dlgMedia: id('dlg-media'),
-      mediaTitle: id('media-error-title'),
-      mediaText: id('media-error-text'),
-      mediaRetry: id('media-retry'),
     };
 
     this.#bindUi();
@@ -99,56 +98,41 @@ export class Chat {
 
   // ------------------------------------------------------------ public API
 
-  async open({ mode, interests = [], langOnly = false }) {
+  /** Enter the room and start looking for someone right away. */
+  open({ mode, interests = [], langOnly = false }) {
     this.mode = mode;
     this.search = { interests, langOnly };
     this.el.layout.dataset.mode = mode;
     this.#clearMessages();
-    this.#setState('idle');
-    await this.#start();
+    if (mode === 'video') this.#attachLocal();
+    this.#find();
   }
 
-  /** Leave the chat room entirely (back to the landing page). */
+  /** Leaving the room (Stop, back button…): end any chat and clean up. */
   close() {
-    this.session++;
-    this.stop();
-    for (const dialog of [this.el.dlgReport, this.el.dlgSettings, this.el.dlgMedia]) if (dialog.open) dialog.close('');
-    stopStream(this.stream);
-    this.stream = null;
+    this.#stopSearching();
+    for (const dialog of [this.el.dlgReport, this.el.dlgSettings]) if (dialog.open) dialog.close('');
     this.el.localVideo.srcObject = null;
-    this.el.layout.dataset.media = 'none';
     this.lastPairId = null;
     this.#clearMessages();
   }
 
   next() {
-    if (this.state === 'idle') return void this.#start();
+    if (this.state === 'idle') return void this.#find();
     if (this.state === 'searching') return;
     if (this.state === 'connected' || this.state === 'connecting') this.#addSystem(t('chat.youLeft'));
     this.#find();
   }
 
-  stop() {
+  #stopSearching() {
     this.#clearTimer('autoNext');
     if (this.state !== 'idle' && this.socket.connected) this.socket.emit('stop');
-    if (this.state === 'connected' || this.state === 'connecting') this.#addSystem(t('chat.youLeft'));
     this.#endPeer();
     this.resumeOnReconnect = false;
     this.#setState('idle');
   }
 
   // ------------------------------------------------------------ flow
-
-  async #start() {
-    if (this.starting) return;
-    this.starting = true;
-    try {
-      if (this.mode === 'video' && !(await this.#ensureMedia())) return;
-      this.#find();
-    } finally {
-      this.starting = false;
-    }
-  }
 
   async #find() {
     this.#clearTimer('autoNext');
@@ -165,6 +149,10 @@ export class Chat {
       lang: config.lang,
     });
     if (res?.ok || this.state !== 'searching') return;
+    if (res?.error === 'auth_required' || res?.error === 'guidelines_required') {
+      this.#setState('idle');
+      return this.onAuthNeeded();
+    }
     if (res?.error === 'rate_limited') {
       toast(t('error.rateLimited'));
       this.timers.autoNext = setTimeout(() => this.state === 'searching' && this.#find(), 3000);
@@ -194,7 +182,7 @@ export class Chat {
       this.peer = new Peer({
         iceServers,
         iceTransportPolicy: this.hello?.iceTransportPolicy || 'all',
-        stream: this.stream,
+        stream: this.camera.stream,
         initiator,
         send: (msg) => this.socket.emit('signal', { ...msg, pairId }),
       });
@@ -274,85 +262,25 @@ export class Chat {
 
   // ------------------------------------------------------------ camera & mic
 
-  /** @returns {Promise<boolean>} true when we can go on (possibly in text mode). */
-  async #ensureMedia() {
-    if (this.stream?.getTracks().some((track) => track.readyState === 'live')) return true;
-    const session = this.session;
-    let problem = !mediaSupported ? 'unsupported' : !window.isSecureContext ? 'insecure' : null;
-    if (!problem) {
-      this.el.layout.dataset.media = 'pending';
-      try {
-        const stream = await openLocalMedia({ cameraId: prefs.get('cameraId'), micId: prefs.get('micId') });
-        if (session !== this.session) {
-          stopStream(stream);
-          return false;
-        }
-        this.stream = stream;
-      } catch (err) {
-        problem = mediaErrorKind(err);
-      }
-    }
-    if (session !== this.session) return false;
-
-    if (problem) {
-      this.el.layout.dataset.media = 'error';
-      const choice = await this.#showMediaProblem(problem);
-      if (session !== this.session) return false;
-      if (choice === 'retry') return this.#ensureMedia();
-      if (choice === 'text') {
-        this.mode = 'text';
-        this.el.layout.dataset.mode = 'text';
-        return true;
-      }
-      this.onLeave();
-      return false;
-    }
-
-    this.el.layout.dataset.media = 'ready';
-    this.#attachLocal();
-    return true;
-  }
-
-  #showMediaProblem(kind) {
-    const { mediaTitle, mediaText, mediaRetry, dlgMedia } = this.el;
-    const copy = {
-      denied: [t('media.denied.title'), t('media.denied.text')],
-      notFound: [t('media.notFound'), ''],
-      inUse: [t('media.inUse'), ''],
-      unsupported: [t('error.unsupported'), ''],
-      insecure: [t('error.insecure'), ''],
-    }[kind] ?? [t('media.denied.title'), t('media.denied.text')];
-    mediaTitle.textContent = copy[0];
-    mediaText.textContent = copy[1];
-    mediaText.hidden = !copy[1];
-    mediaRetry.hidden = kind === 'unsupported' || kind === 'insecure';
-    return openDialog(dlgMedia);
-  }
-
-  // Like Monkey: once permission is granted, camera and microphone simply stay
-  // on for the whole video chat — there are no mute / camera-off buttons.
+  // Like Monkey: once permission is granted (in the lobby), camera and
+  // microphone simply stay on for the whole video chat — no mute buttons.
   #attachLocal() {
+    const stream = this.camera.stream;
     const video = this.el.localVideo;
-    video.srcObject = this.stream;
+    video.srcObject = stream;
     video.play?.().catch(() => {});
-    for (const track of this.stream.getTracks()) {
-      track.enabled = true;
+    for (const track of stream?.getTracks() ?? []) {
       track.onended = () => {
         // Camera or mic unplugged / taken by another app: tell the partner.
-        this.el.localCamOff.hidden = this.#hasTrack('video');
+        this.el.localCamOff.hidden = this.camera.hasTrack('video');
         this.#sendMediaState();
       };
     }
-    const videoTrack = this.stream.getVideoTracks()[0];
-    video.classList.toggle('mirrored', videoTrack?.getSettings?.().facingMode !== 'environment');
-    this.el.localCamOff.hidden = Boolean(videoTrack);
-    listDevices().then(({ cameras }) => {
+    video.classList.toggle('mirrored', this.camera.facing !== 'environment');
+    this.el.localCamOff.hidden = this.camera.hasTrack('video');
+    this.camera.cameras().then((cameras) => {
       this.el.flipBtn.hidden = cameras.length < 2;
     });
-  }
-
-  #hasTrack(kind) {
-    return Boolean(this.stream?.getTracks().some((track) => track.kind === kind && track.readyState === 'live'));
   }
 
   /** Lets the partner know if this device has no working camera or microphone. */
@@ -361,8 +289,8 @@ export class Chat {
     this.socket.emit('signal', {
       pairId: this.pairId,
       kind: 'media',
-      audio: this.#hasTrack('audio'),
-      video: this.#hasTrack('video'),
+      audio: this.camera.hasTrack('audio'),
+      video: this.camera.hasTrack('video'),
     });
   }
 
@@ -371,36 +299,12 @@ export class Chat {
     this.el.partnerMuted.hidden = audio !== false;
   }
 
-  async #flipCamera() {
-    const { cameras } = await listDevices();
-    if (cameras.length < 2) return;
-    const current = this.stream?.getVideoTracks()[0]?.getSettings?.().deviceId;
-    const index = cameras.findIndex((c) => c.deviceId === current);
-    await this.#useDevice('video', cameras[(index + 1) % cameras.length].deviceId);
-  }
-
-  async #useDevice(kind, deviceId) {
-    if (!this.stream) return;
-    const old = kind === 'video' ? this.stream.getVideoTracks()[0] : this.stream.getAudioTracks()[0];
-    if (old && old.getSettings?.().deviceId === deviceId) return;
-    old?.stop(); // many phones can't open two cameras at once
-    const open = kind === 'video' ? openCamera : openMic;
-    let track;
-    try {
-      track = await open(deviceId);
-    } catch {
-      try {
-        track = await open(undefined);
-      } catch {
-        toast(t('media.inUse'));
-      }
-    }
-    if (old) this.stream.removeTrack(old);
-    if (!track) return this.#attachLocal();
-    this.stream.addTrack(track);
-    await this.peer?.replaceTrack(kind, track).catch(() => {});
-    prefs.set(kind === 'video' ? 'cameraId' : 'micId', track.getSettings?.().deviceId ?? deviceId);
-    this.#attachLocal();
+  /** Camera switched (flip button or Settings): swap it into the live call. */
+  async #onTrackChanged({ kind, track }) {
+    if (!track) toast(t('media.inUse'));
+    else await this.peer?.replaceTrack(kind, track).catch(() => {});
+    if (this.mode === 'video') this.#attachLocal();
+    this.#sendMediaState();
   }
 
   // ------------------------------------------------------------ messages
@@ -611,8 +515,9 @@ export class Chat {
   #bindUi() {
     const el = this.el;
     el.nextBtn.addEventListener('click', () => this.next());
-    el.stopBtn.addEventListener('click', () => this.stop());
-    el.flipBtn.addEventListener('click', () => this.#flipCamera());
+    el.stopBtn.addEventListener('click', () => this.onLeave());
+    el.flipBtn.addEventListener('click', () => this.camera.flip());
+    this.camera.addEventListener('track', (event) => this.#onTrackChanged(event.detail));
     el.reportBtn.addEventListener('click', () => this.#report());
     el.settingsBtn.addEventListener('click', () => this.#openSettings());
     el.revealBtn.addEventListener('click', () => this.#setBlur(false));
@@ -632,8 +537,8 @@ export class Chat {
 
     el.blurToggle.addEventListener('change', () => prefs.set('blur', el.blurToggle.checked));
     el.autoNextToggle.addEventListener('change', () => prefs.set('autoNext', el.autoNextToggle.checked));
-    el.cameraSelect.addEventListener('change', () => this.#useDevice('video', el.cameraSelect.value));
-    el.micSelect.addEventListener('change', () => this.#useDevice('audio', el.micSelect.value));
+    el.cameraSelect.addEventListener('change', () => this.camera.useDevice('video', el.cameraSelect.value));
+    el.micSelect.addEventListener('change', () => this.camera.useDevice('audio', el.micSelect.value));
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && this.baseTitle) {
@@ -647,12 +552,13 @@ export class Chat {
     const { blurToggle, autoNextToggle, deviceFields, cameraSelect, micSelect, dlgSettings } = this.el;
     blurToggle.checked = prefs.get('blur', false);
     autoNextToggle.checked = prefs.get('autoNext', true);
-    const hasMedia = this.mode === 'video' && Boolean(this.stream);
+    const stream = this.camera.stream;
+    const hasMedia = this.mode === 'video' && Boolean(stream);
     deviceFields.hidden = !hasMedia;
     if (hasMedia) {
       const { cameras, mics } = await listDevices();
-      const currentVideo = this.stream.getVideoTracks()[0]?.getSettings?.().deviceId;
-      const currentAudio = this.stream.getAudioTracks()[0]?.getSettings?.().deviceId;
+      const currentVideo = stream.getVideoTracks()[0]?.getSettings?.().deviceId;
+      const currentAudio = stream.getAudioTracks()[0]?.getSettings?.().deviceId;
       fillSelect(cameraSelect, cameras, currentVideo, t('settings.camera'));
       fillSelect(micSelect, mics, currentAudio, t('settings.mic'));
     }

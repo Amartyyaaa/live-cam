@@ -12,10 +12,10 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ICONS = [
-  'video', 'video-off', 'mic', 'mic-off', 'message-circle', 'arrow-right', 'arrow-left', 'x', 'flag',
-  'settings', 'send-horizontal', 'switch-camera', 'globe', 'shield-check', 'zap', 'venetian-mask', 'eye',
-  'house', 'chevron-down', 'chevron-left', 'chevron-right', 'plus', 'earth', 'sparkles', 'user-round',
-  'circle-alert', 'square', 'refresh-cw', 'ban', 'languages',
+  'video', 'video-off', 'mic-off', 'message-circle', 'arrow-right', 'arrow-left', 'arrow-up-right', 'x', 'flag',
+  'settings', 'send-horizontal', 'switch-camera', 'globe', 'shield-check', 'eye', 'eye-off', 'chevron-down',
+  'chevron-left', 'plus', 'user-round', 'circle-alert', 'square', 'refresh-cw', 'ban', 'log-in', 'log-out',
+  'link-2-off', 'heart',
 ];
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));

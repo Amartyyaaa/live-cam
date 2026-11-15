@@ -16,7 +16,8 @@
     "screenshots": "node scripts/screenshots.cjs",
     "gen:images": "node scripts/gen-images.cjs",
     "gen:geo": "node scripts/gen-geo-data.mjs",
-    "build:sprite": "node scripts/build-sprite.mjs"
+    "build:sprite": "node scripts/build-sprite.mjs",
+    "gen:landing": "node scripts/gen-landing-assets.cjs"
   },
   "license": "UNLICENSED",
   "dependencies": {

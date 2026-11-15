@@ -1,7 +1,8 @@
 // Reports and bans.
 //
-// A user is identified by two keys: "c:<clientId>" (random id stored in the
-// browser) and "i:<ipHash>" (HMAC of the IP address — we never store raw IPs).
+// A user is identified by up to three keys: "u:<userId>" (their account),
+// "c:<clientId>" (random id stored in the browser) and "i:<ipHash>" (HMAC of
+// the IP address — we never store raw IPs).
 // When enough *different* people report the same key within a time window,
 // both of the offender's keys are banned temporarily. Banning on both keys
 // means clearing browser storage is not enough to come straight back.
@@ -17,6 +18,9 @@ import path from 'node:path';
 
 export const clientKey = (clientId) => `c:${clientId}`;
 export const ipKey = (ipHash) => `i:${ipHash}`;
+export const userKey = (userId) => `u:${userId}`;
+/** The strongest identity we have: the account if signed in, else the browser. */
+export const primaryKey = ({ userId, clientId }) => (userId ? userKey(userId) : clientKey(clientId));
 
 export class Moderation {
   /**
@@ -41,9 +45,9 @@ export class Moderation {
   }
 
   /** @returns {{ until: number, reason: string } | null} */
-  isBanned({ clientId, ipHash }) {
+  isBanned({ clientId, ipHash, userId }) {
     const t = this.now();
-    for (const key of [clientId && clientKey(clientId), this.banIp && ipHash && ipKey(ipHash)]) {
+    for (const key of [userId && userKey(userId), clientId && clientKey(clientId), this.banIp && ipHash && ipKey(ipHash)]) {
       if (!key) continue;
       const ban = this.bans.get(key);
       if (!ban) continue;
@@ -99,8 +103,8 @@ export class Moderation {
       at: new Date(t).toISOString(),
       reason,
       mode,
-      reporter: { clientId: reporter.clientId, ipHash: reporter.ipHash },
-      target: { clientId: target.clientId, ipHash: target.ipHash, country: target.country ?? null },
+      reporter: { userId: reporter.userId ?? null, clientId: reporter.clientId, ipHash: reporter.ipHash },
+      target: { userId: target.userId ?? null, clientId: target.clientId, ipHash: target.ipHash, country: target.country ?? null },
       transcript: transcript.slice(-20),
     };
     this.reports.push(record);
@@ -108,7 +112,7 @@ export class Moderation {
     this.store?.appendReport(record);
 
     const sameNetwork = reporter.ipHash === target.ipHash;
-    const cKey = clientKey(target.clientId);
+    const cKey = primaryKey(target); // the account when signed in, else the browser
     const iKey = ipKey(target.ipHash);
     // Count distinct reporters by IP so one person with many tabs counts once.
     const reporterId = ipKey(reporter.ipHash);
@@ -124,7 +128,7 @@ export class Moderation {
     const strikes = Math.max(clientStrikes, ipStrikes);
 
     if (clientStrikes >= this.threshold || ipStrikes >= this.threshold * 2) {
-      const until = this.ban([cKey], { reason: 'reports', source: 'auto' });
+      const until = this.ban(target.userId ? [cKey, clientKey(target.clientId)] : [cKey], { reason: 'reports', source: 'auto' });
       if (this.banIp && !sameNetwork) this.ban([iKey], { ms: this.ipBanMs, reason: 'reports', source: 'auto' });
       this.strikes.delete(cKey);
       this.strikes.delete(iKey);

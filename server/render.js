@@ -6,6 +6,8 @@
 //
 // Template syntax (server/views/*.html):
 //   {{t:some.key}}  translated + HTML-escaped string
+//   {{h:some.key}}  same, with the *starred* words wrapped in <em> (highlights)
+//   {{l:some.key}}  same, with {terms} {privacy} {guidelines} turned into links
 //   {{NAME}}        HTML-escaped variable
 //   {{{NAME}}}      raw HTML variable (only for markup we build here)
 
@@ -33,19 +35,64 @@ export const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c)
 // JSON that is safe to embed inside <script type="application/json">.
 const safeJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
 
-const TOKEN = /\{\{\{([A-Z0-9_]+)\}\}\}|\{\{t:([\w.-]+)\}\}|\{\{([A-Z0-9_]+)\}\}/g;
-
-function fill(template, { t, vars = {}, raw = {} }) {
-  return template.replace(TOKEN, (_, rawKey, tKey, varKey) => {
-    if (rawKey) return raw[rawKey] ?? '';
-    if (tKey) return escapeHtml(t(tKey));
-    return escapeHtml(vars[varKey] ?? '');
-  });
-}
+const TOKEN = /\{\{\{([A-Z0-9_]+)\}\}\}|\{\{([thl]):([\w.-]+)\}\}|\{\{([A-Z0-9_]+)\}\}/g;
 
 function interpolate(str, vars) {
   return str.replace(/\{(\w+)\}/g, (match, key) => (key in vars ? String(vars[key]) : match));
 }
+
+const highlight = (text) => escapeHtml(text).replace(/\*([^*]+)\*/g, '<em>$1</em>');
+const plain = (text) => String(text).replace(/\*/g, '');
+
+function fill(template, { t, vars = {}, raw = {} }) {
+  const link = (href, key) => `<a href="${href}" target="_blank" rel="noopener">${escapeHtml(t(key))}</a>`;
+  const legalLinks = () => ({
+    terms: link('/terms', 'link.terms'),
+    privacy: link('/privacy', 'link.privacy'),
+    guidelines: link('/guidelines', 'link.guidelines'),
+  });
+  return template.replace(TOKEN, (_, rawKey, kind, key, varKey) => {
+    if (rawKey) return raw[rawKey] ?? '';
+    if (kind === 't') return escapeHtml(plain(t(key)));
+    if (kind === 'h') return highlight(t(key));
+    if (kind === 'l') return interpolate(escapeHtml(t(key)), legalLinks());
+    return escapeHtml(vars[varKey] ?? '');
+  });
+}
+
+// Cards in the "people" band: illustrated portraits saying hi in their language.
+const PEOPLE = [
+  { img: 1, doodle: 'hi', flag: 'BR', hello: 'Oi!', lang: 'pt' },
+  { img: 2, doodle: 'crown', flag: 'JP', hello: 'やあ！', lang: 'ja' },
+  { img: 3, doodle: 'heart', flag: 'NG', hello: 'Hello!', lang: 'en' },
+  { img: 4, doodle: 'arrow', flag: 'IN', hello: 'नमस्ते', lang: 'hi' },
+  { brand: true },
+  { img: 5, doodle: 'sparkle', flag: 'FR', hello: 'Salut\u00a0!', lang: 'fr' },
+  { img: 6, doodle: 'hi', flag: 'EG', hello: 'أهلاً', lang: 'ar' },
+  { img: 7, doodle: 'crown', flag: 'MX', hello: '¡Hola!', lang: 'es' },
+  { img: 8, doodle: 'heart', flag: 'KR', hello: '안녕!', lang: 'ko' },
+];
+
+// Hand-drawn style doodles (white strokes) layered on the portraits.
+const DOODLES = {
+  hi: '<svg viewBox="0 0 96 90"><path d="M12 42C10 20 30 8 52 10c22 2 36 16 34 34s-20 28-40 26L28 84l5-17C19 62 13 54 12 42Z"/><path d="M35 28v28M51 28v28M35 42h16M63 37v19M63 28v1"/></svg>',
+  crown: '<svg viewBox="0 0 96 70"><path d="M14 52 18 18l16 18 14-26 14 26 16-18 4 34Z"/><path d="M14 62c22 6 46 6 68 0"/><path d="M18 14v1M48 6v1M78 14v1"/></svg>',
+  heart: '<svg viewBox="0 0 90 80"><path d="M45 72C14 52 6 30 22 18c10-7 20-2 23 8 3-10 13-15 23-8 16 12 8 34-23 54Z"/><path d="M70 10l6-6M78 22l8-2"/></svg>',
+  arrow: '<svg viewBox="0 0 96 90"><path d="M10 80C30 70 44 48 74 18"/><path d="M58 14l18 2-4 18"/></svg>',
+  sparkle: '<svg viewBox="0 0 96 90"><path d="M48 10c3 18 9 24 26 27-17 3-23 9-26 27-3-18-9-24-26-27 17-3 23-9 26-27Z"/><path d="M80 62c1 6 3 8 9 9-6 1-8 3-9 9-1-6-3-8-9-9 6-1 8-3 9-9Z"/></svg>',
+};
+
+const BAND_FLAGS = [
+  'US', 'BR', 'IN', 'ID', 'MX', 'TR', 'EG', 'NG', 'PH', 'FR', 'DE', 'JP', 'KR', 'VN', 'PK', 'ES',
+  'IT', 'GB', 'CA', 'AR', 'CO', 'ZA', 'KE', 'SA', 'MA', 'TH', 'PL', 'AU', 'PE', 'BD', 'CL', 'NL',
+  'SE', 'GH', 'MY', 'AE', 'PT', 'UA', 'NZ', 'IE', 'GR', 'CH', 'SG', 'LK', 'NP', 'ET', 'TZ', 'DZ',
+];
+const INTEREST_EMOJI = {
+  music: '🎵', gaming: '🎮', movies: '🎬', anime: '🍥', travel: '✈️', sports: '⚽',
+  books: '📚', art: '🎨', tech: '💻', food: '🍜', memes: '😂', languages: '🗣️',
+};
+
+export const flagEmoji = (code) => String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
 
 export class Renderer {
   /**
@@ -160,12 +207,6 @@ export class Renderer {
   renderIndex({ lang, origin }) {
     this.#fresh();
     const { locale, t, vars } = this.#shared(lang, origin);
-    const link = (href, text) => `<a href="${href}" target="_blank" rel="noopener">${escapeHtml(text)}</a>`;
-    const consent = interpolate(escapeHtml(t('consent')), {
-      terms: link('/terms', t('link.terms')),
-      guidelines: link('/guidelines', t('link.guidelines')),
-    });
-
     const hreflang = [
       ...this.languages.map(
         (l) => `<link rel="alternate" hreflang="${l.code}" href="${escapeHtml(origin + this.homePath(l.code))}">`,
@@ -194,21 +235,51 @@ export class Renderer {
       maxInterestLength: this.config.limits.maxInterestLength,
       maxMessageLength: this.config.limits.maxMessageLength,
       interestIds: INTEREST_IDS,
+      auth: {
+        required: this.config.auth.required,
+        google: this.config.auth.googleClientId || null,
+        email: this.config.auth.allowEmail,
+      },
     };
 
-    // "Say hi to the *world*." -> highlight the starred word.
-    const heroTitle = escapeHtml(t('hero.title')).replace(/\*([^*]+)\*/, '<em>$1</em>');
+    const card = (person, hidden) => {
+      if (person.brand) {
+        return (
+          `<div class="person-card brand-card">${LOGO_SVG}<span class="brand-card-name">${escapeHtml(this.config.appName)}</span>` +
+          `<button type="button" class="btn btn-black" data-start="video"${hidden ? ' tabindex="-1"' : ''}>${escapeHtml(plain(t('cards.cta')))}</button></div>`
+        );
+      }
+      return (
+        `<div class="person-card"><img src="/img/people/${person.img}.webp" alt="" width="320" height="400" loading="lazy" decoding="async">` +
+        `<span class="doodle doodle-${person.doodle}">${DOODLES[person.doodle]}</span>` +
+        `<span class="hello-chip"><span class="flag">${flagEmoji(person.flag)}</span><span lang="${person.lang}" dir="auto">${person.hello}</span></span></div>`
+      );
+    };
+    const peopleCards =
+      PEOPLE.map((p) => card(p, false)).join('') +
+      `<div class="marquee-copy" aria-hidden="true">${PEOPLE.map((p) => card(p, true)).join('')}</div>`;
+
+    const flags = (list) => {
+      const items = list.map((code) => `<span class="flag-chip"><span class="flag">${flagEmoji(code)}</span></span>`).join('');
+      return `${items}<span class="marquee-copy" aria-hidden="true">${items}</span>`;
+    };
+    const half = Math.ceil(BAND_FLAGS.length / 2);
+    const interestPills = INTEREST_IDS.map(
+      (id) => `<li class="interest-pill"><span aria-hidden="true">${INTEREST_EMOJI[id]}</span>${escapeHtml(t(`interest.${id}`))}</li>`,
+    ).join('');
 
     return fill(this.templates.index, {
       t,
       vars: { ...vars, CANONICAL: origin + this.homePath(locale.code) },
       raw: {
         LOGO: LOGO_SVG,
-        HERO_TITLE: heroTitle,
         HREFLANG: hreflang,
         LANG_LINKS: langLinks,
-        CONSENT_HTML: consent,
         INTEREST_CHIPS: interestChips,
+        PEOPLE_CARDS: peopleCards,
+        INTEREST_PILLS: interestPills,
+        FLAGS_A: flags(BAND_FLAGS.slice(0, half)),
+        FLAGS_B: flags(BAND_FLAGS.slice(half)),
         I18N_JSON: safeJson(locale.dict),
         CONFIG_JSON: safeJson(clientConfig),
       },

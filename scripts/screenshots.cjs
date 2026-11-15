@@ -105,6 +105,9 @@ function fakeCamera({ person, cameras }) {
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
   process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'hiyo-shots-'));
+  process.env.AUTH_ATTEMPTS_PER_MINUTE = '200';
+  delete process.env.GOOGLE_CLIENT_ID; // the email form photographs the same everywhere
+  delete process.env.REQUIRE_SIGN_IN;
   const { loadConfig } = await import(path.join(ROOT, 'server/config.js'));
   const { createServer } = await import(path.join(ROOT, 'server/app.js'));
   const server = createServer(loadConfig(), { logger: { ...console, info() {}, warn() {} } });
@@ -115,8 +118,8 @@ async function main() {
   const desktop = { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 };
   const phone = devices['Pixel 7'];
 
-  async function open(name, { device = desktop, person, cameras = 1, timezoneId = 'Europe/Berlin', locale = 'en-US', path: url = '/', scheme = 'light' } = {}) {
-    const context = await browser.newContext({ ...device, timezoneId, locale, colorScheme: scheme });
+  async function open(name, { device = desktop, person, cameras = 1, timezoneId = 'Europe/Berlin', locale = 'en-US', path: url = '/' } = {}) {
+    const context = await browser.newContext({ ...device, timezoneId, locale, colorScheme: 'dark' });
     if (person) await context.addInitScript(fakeCamera, { person: PEOPLE[person], cameras });
     const page = await context.newPage();
     page.on('pageerror', (err) => console.error(`${name}: ${err.message}`));
@@ -125,16 +128,39 @@ async function main() {
     return page;
   }
   const shot = async (page, file, opts = {}) => {
-    await page.waitForTimeout(opts.settle ?? 700);
+    if (opts.settle !== 0) await page.waitForTimeout(opts.settle ?? 700);
     await page.screenshot({ path: path.join(OUT, file), type: 'jpeg', quality: 88, ...opts.screenshot });
     console.log(`  ✓ ${file}`);
   };
   const state = (page, value) =>
     page.waitForFunction((v) => document.getElementById('chat-layout').dataset.state === v, value, { timeout: 20000 });
-  async function start(page, { mode = 'video', interests = [] } = {}) {
-    for (const tag of interests) await page.click(`.chip-suggest[data-interest="${tag}"]`);
-    await page.check('#consent');
-    await page.click(mode === 'video' ? '#start-video' : '#start-text');
+  const formed = (page) => page.waitForSelector('#intro.is-formed', { timeout: 15000 });
+  let accounts = 0;
+  /** Landing → Start → create an account → accept the guidelines → lobby. */
+  async function enter(page, { mode = 'video', name = 'Sam', shots = {} } = {}) {
+    await formed(page);
+    await page.click(`#intro [data-start="${mode}"]`);
+    await page.waitForSelector('#view-auth:not([hidden])');
+    await page.click('#email-auth [data-tab="signup"]');
+    await page.fill('#auth-form [name=name]', name);
+    await page.fill('#auth-form [name=email]', `${name.toLowerCase()}${++accounts}@example.com`);
+    await page.fill('#auth-form [name=password]', 'a-long-password');
+    if (shots.signin) await shot(page, shots.signin, { settle: 300 });
+    await page.click('#auth-form .auth-submit');
+    await page.waitForSelector('#dlg-guidelines[open]');
+    if (shots.guidelines) {
+      await page.check('#guide-form [name=age]');
+      await shot(page, shots.guidelines, { settle: 400 });
+    }
+    await page.check('#guide-form [name=age]');
+    await page.check('#guide-form [name=terms]');
+    await page.click('#guide-form button[value="agree"]');
+    await page.waitForSelector('#view-lobby:not([hidden])');
+  }
+  async function start(page, { interests = [] } = {}) {
+    for (const tag of interests) await page.click(`#suggestions .chip-suggest[data-interest="${tag}"]`);
+    await page.click('#lobby-start');
+    await page.waitForSelector('#view-chat:not([hidden])');
   }
   const say = async (page, text) => {
     await page.fill('#message-input', text);
@@ -144,19 +170,37 @@ async function main() {
 
   try {
     // ------------------------------------------------------------ landing
-    const home = await open('home');
-    await shot(home, 'home-desktop.jpg', { screenshot: { fullPage: true } });
+    const intro = await open('intro');
+    await intro.waitForTimeout(1300);
+    await shot(intro, 'intro-words.jpg', { settle: 0 });
+    await formed(intro);
+    await shot(intro, 'home-desktop.jpg', { settle: 1200 });
+    await intro.evaluate(async () => {
+      // Scroll through once so every lazy image is loaded for the full-page shot.
+      for (let y = 0; y < document.documentElement.scrollHeight; y += 500) {
+        window.scrollTo(0, y);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+      }
+      window.scrollTo(0, 0);
+    });
+    await shot(intro, 'home-full.jpg', { screenshot: { fullPage: true, scale: 'css', quality: 80 } });
     const homePhone = await open('home-phone', { device: phone });
-    await shot(homePhone, 'home-mobile.jpg');
-    const homeDark = await open('home-dark', { scheme: 'dark' });
-    await shot(homeDark, 'home-dark.jpg');
+    await formed(homePhone);
+    await shot(homePhone, 'home-mobile.jpg', { settle: 1200 });
     const homeAr = await open('home-ar', { path: '/ar', locale: 'ar-EG' });
-    await shot(homeAr, 'home-arabic-rtl.jpg');
+    await formed(homeAr);
+    await shot(homeAr, 'home-arabic-rtl.jpg', { settle: 1200 });
     const homeHi = await open('home-hi', { device: phone, path: '/hi', locale: 'hi-IN' });
-    await shot(homeHi, 'home-hindi-mobile.jpg');
+    await formed(homeHi);
+    await shot(homeHi, 'home-hindi-mobile.jpg', { settle: 1200 });
+
+    // ------------------------------------------------------------ sign in → guidelines → lobby
+    const solo = await open('solo', { person: 'aiko', timezoneId: 'Asia/Tokyo' });
+    await enter(solo, { name: 'Aiko', shots: { signin: 'signin-desktop.jpg', guidelines: 'guidelines-dialog.jpg' } });
+    await solo.click('#suggestions .chip-suggest[data-interest="anime"]');
+    await shot(solo, 'lobby-desktop.jpg', { settle: 1000 });
 
     // ------------------------------------------------------------ searching (alone in the queue)
-    const solo = await open('solo', { person: 'aiko', timezoneId: 'Asia/Tokyo' });
     await start(solo);
     await state(solo, 'searching');
     await shot(solo, 'chat-searching.jpg', { settle: 1800 });
@@ -165,6 +209,9 @@ async function main() {
     // ------------------------------------------------------------ video chat: desktop ↔ phone
     const priya = await open('priya', { person: 'priya', timezoneId: 'Asia/Kolkata' });
     const lucas = await open('lucas', { device: phone, person: 'lucas', cameras: 2, timezoneId: 'America/Sao_Paulo' });
+    await enter(priya, { name: 'Priya' });
+    await enter(lucas, { name: 'Lucas' });
+    await shot(lucas, 'lobby-mobile.jpg', { settle: 1000 });
     await start(priya, { interests: ['music', 'travel'] });
     await state(priya, 'searching');
     await start(lucas, { interests: ['travel', 'food'] });
@@ -195,9 +242,11 @@ async function main() {
     // ------------------------------------------------------------ text-only chat
     const textA = await open('textA', { timezoneId: 'Europe/Madrid', path: '/es', locale: 'es-ES' });
     const textB = await open('textB', { timezoneId: 'America/Mexico_City', path: '/es', locale: 'es-MX' });
-    await start(textA, { mode: 'text', interests: ['movies'] });
+    await enter(textA, { mode: 'text', name: 'Lucía' });
+    await enter(textB, { mode: 'text', name: 'Diego' });
+    await start(textA, { interests: ['movies'] });
     await state(textA, 'searching');
-    await start(textB, { mode: 'text', interests: ['movies'] });
+    await start(textB, { interests: ['movies'] });
     await Promise.all([state(textA, 'connected'), state(textB, 'connected')]);
     await say(textB, '¡Hola! ¿Qué película viste últimamente?');
     await say(textA, 'Hola 😄 Vi una de Studio Ghibli, ¡increíble!');

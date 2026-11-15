@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{LANG}}" dir="{{DIR}}">
+<html lang="{{LANG}}" dir="{{DIR}}" class="theme-dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
@@ -7,9 +7,8 @@
   <meta name="description" content="{{t:meta.description}}">
   <link rel="canonical" href="{{CANONICAL}}">
   {{{HREFLANG}}}
-  <meta name="theme-color" content="#FFF6EE" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#120D18" media="(prefers-color-scheme: dark)">
-  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0B0811">
+  <meta name="color-scheme" content="dark">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="{{APP_NAME}}">
   <meta property="og:title" content="{{t:meta.title}}">
@@ -30,7 +29,10 @@
   <link rel="modulepreload" href="/js/prefs.js">
   <link rel="modulepreload" href="/js/net.js">
   <link rel="modulepreload" href="/js/ui.js">
-  <link rel="modulepreload" href="/js/home.js">
+  <link rel="modulepreload" href="/js/intro.js">
+  <link rel="modulepreload" href="/js/account.js">
+  <link rel="modulepreload" href="/js/lobby.js">
+  <link rel="modulepreload" href="/js/camera.js">
   <link rel="modulepreload" href="/js/chat.js">
   <link rel="modulepreload" href="/js/media.js">
   <link rel="modulepreload" href="/js/peer.js">
@@ -56,102 +58,160 @@
           </summary>
           <ul class="lang-menu" role="list">{{{LANG_LINKS}}}</ul>
         </details>
+        <button type="button" class="btn btn-light btn-sm" data-signin hidden>
+          <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-log-in"/></svg><span>{{t:nav.signIn}}</span>
+        </button>
+        <div class="account" data-account hidden>
+          <button type="button" class="avatar-btn" aria-haspopup="true" aria-expanded="false" aria-label="{{t:account.menu}}">
+            <img class="avatar-img" alt="" referrerpolicy="no-referrer" hidden><span class="avatar-initial"></span>
+          </button>
+          <div class="account-menu" hidden>
+            <p class="account-name"></p>
+            <p class="account-email"></p>
+            <button type="button" class="account-item" data-signout>
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-log-out"/></svg><span>{{t:nav.signOut}}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
 
-    <main id="main" class="home-main">
-      <section class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow"><span class="live-dot"></span>{{t:hero.eyebrow}}</p>
-          <h1 class="hero-title">{{{HERO_TITLE}}}</h1>
-          <p class="hero-subtitle">{{t:hero.subtitle}}</p>
-
-          <form class="start-card" id="start-form" novalidate>
-            <div class="field">
-              <div class="field-head">
-                <label class="field-label" for="interest-input">{{t:interests.label}}</label>
-                <span class="field-optional">{{t:interests.optional}}</span>
-              </div>
-              <div class="tag-input" id="tag-input">
-                <ul class="tag-list" id="tag-list" role="list"></ul>
-                <input id="interest-input" type="text" autocomplete="off" autocapitalize="none" enterkeyhint="done"
-                       maxlength="24" placeholder="{{t:interests.placeholder}}" aria-describedby="interest-hint">
-              </div>
-              <div class="suggestions" id="suggestions">{{{INTEREST_CHIPS}}}</div>
-              <p class="field-hint" id="interest-hint">{{t:interests.hint}}</p>
-            </div>
-
-            <label class="switch-row">
-              <input type="checkbox" class="switch" id="same-language">
-              <span>{{t:filter.sameLanguage}}</span>
-            </label>
-
-            <label class="consent" id="consent-row">
-              <input type="checkbox" class="check" id="consent">
-              <span>{{{CONSENT_HTML}}}</span>
-            </label>
-            <p class="form-error" id="start-error" role="alert" hidden>{{t:consent.required}}</p>
-
-            <div class="start-actions">
-              <button type="submit" class="btn btn-primary btn-xl" id="start-video" data-mode="video">
-                <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video"/></svg><span>{{t:start.video}}</span>
-              </button>
-              <button type="button" class="btn btn-secondary btn-xl" id="start-text" data-mode="text">
-                <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-message-circle"/></svg><span>{{t:start.text}}</span>
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <div class="hero-visual" aria-hidden="true">
-          <div class="orbit">
-            <div class="ring ring-1"></div>
-            <div class="ring ring-2"></div>
-            <div class="ring ring-3"></div>
-            <div class="orbit-track">
-              <span class="node n1"><span class="flag">🇺🇸</span></span>
-              <span class="node n2"><span class="flag">🇵🇭</span></span>
-              <span class="node n3"><span class="flag">🇩🇪</span></span>
-              <span class="node n4"><span class="flag">🇳🇬</span></span>
-              <span class="node n5"><span class="flag">🇻🇳</span></span>
-              <span class="node n6"><span class="flag">🇨🇴</span></span>
-              <span class="node n7"><span class="flag">🇮🇩</span></span>
-              <span class="node n8"><span class="flag">🇬🇧</span></span>
-            </div>
-            <div class="orbit-core">{{{LOGO}}}</div>
-            <span class="bubble b1"><span class="flag">🇧🇷</span><span lang="pt" dir="auto">Oi!</span></span>
-            <span class="bubble b2"><span class="flag">🇯🇵</span><span lang="ja" dir="auto">こんにちは</span></span>
-            <span class="bubble b3"><span class="flag">🇮🇳</span><span lang="hi" dir="auto">नमस्ते</span></span>
-            <span class="bubble b4"><span class="flag">🇲🇽</span><span lang="es" dir="auto">¡Hola!</span></span>
-            <span class="bubble b5"><span class="flag">🇹🇷</span><span lang="tr" dir="auto">Merhaba</span></span>
-            <span class="bubble b6"><span class="flag">🇪🇬</span><span lang="ar" dir="auto">أهلاً</span></span>
-            <span class="bubble b7"><span class="flag">🇰🇪</span><span lang="sw" dir="auto">Jambo!</span></span>
-            <span class="bubble b8"><span class="flag">🇫🇷</span><span lang="fr" dir="auto">Salut&nbsp;!</span></span>
+    <main id="main">
+      <!-- Intro: words from every language fly together to spell the name -->
+      <section class="intro" id="intro">
+        <canvas class="intro-canvas" id="intro-canvas" aria-hidden="true"></canvas>
+        <div class="intro-copy">
+          <h1 class="intro-title"><span class="sr-only">{{APP_NAME}} — </span>{{h:hero.title}}</h1>
+          <p class="intro-sub">{{t:hero.subtitle}}</p>
+          <div class="intro-actions">
+            <button type="button" class="btn btn-primary btn-xl btn-arrow" data-start="video">
+              <span>{{t:start.video}}</span>
+              <span class="arrow-badge" aria-hidden="true"><svg class="icon flip-rtl"><use href="/icons.svg#i-arrow-up-right"/></svg></span>
+            </button>
+            <button type="button" class="btn btn-outline btn-xl" data-start="text">
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-message-circle"/></svg><span>{{t:start.text}}</span>
+            </button>
           </div>
+        </div>
+        <a class="scroll-cue" href="#people" aria-label="{{t:intro.scroll}}">
+          <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-chevron-down"/></svg>
+        </a>
+      </section>
+
+      <!-- People band -->
+      <section class="band" id="people" aria-label="{{APP_NAME}}">
+        <div class="marquee"><div class="marquee-track">{{{PEOPLE_CARDS}}}</div></div>
+      </section>
+
+      <!-- Showcase -->
+      <section class="section showcase">
+        <p class="kicker">{{t:showcase.eyebrow}}</p>
+        <h2 class="section-title">{{h:showcase.title}}</h2>
+        <p class="section-lead">{{t:showcase.text}}</p>
+        <div class="devices">
+          <figure class="device device-desktop">
+            <div class="device-bar">
+              <span class="brand brand-xs">{{{LOGO}}}<span>{{APP_NAME}}</span></span>
+              <span class="device-dots"><i></i><i></i></span>
+            </div>
+            <img src="/img/showcase-desktop.webp" alt="" width="1280" height="800" loading="lazy" decoding="async">
+          </figure>
+          <figure class="device device-phone">
+            <img src="/img/showcase-phone.webp" alt="" width="412" height="839" loading="lazy" decoding="async">
+          </figure>
+          <p class="device-bubble"><b>Lucas:</b> <span dir="auto">{{t:showcase.bubble}}</span></p>
         </div>
       </section>
 
-      <section class="features">
-        <article class="feature">
-          <span class="feature-icon tone-orange"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-earth"/></svg></span>
-          <h2>{{t:feature.world.title}}</h2>
-          <p>{{t:feature.world.text}}</p>
-        </article>
-        <article class="feature">
-          <span class="feature-icon tone-violet"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-venetian-mask"/></svg></span>
-          <h2>{{t:feature.anon.title}}</h2>
-          <p>{{t:feature.anon.text}}</p>
-        </article>
-        <article class="feature">
-          <span class="feature-icon tone-mint"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-shield-check"/></svg></span>
-          <h2>{{t:feature.safe.title}}</h2>
-          <p>{{t:feature.safe.text}}</p>
-        </article>
-        <article class="feature">
-          <span class="feature-icon tone-sun"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-zap"/></svg></span>
-          <h2>{{t:feature.fast.title}}</h2>
-          <p>{{t:feature.fast.text}}</p>
-        </article>
+      <!-- How it works -->
+      <section class="section steps">
+        <p class="kicker">{{t:steps.eyebrow}}</p>
+        <h2 class="section-title">{{h:steps.title}}</h2>
+        <ol class="step-list">
+          <li class="step">
+            <span class="step-num">01</span>
+            <span class="step-icon tone-violet"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-log-in"/></svg></span>
+            <h3>{{t:steps.1.title}}</h3>
+            <p>{{t:steps.1.text}}</p>
+          </li>
+          <li class="step">
+            <span class="step-num">02</span>
+            <span class="step-icon tone-mint"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-shield-check"/></svg></span>
+            <h3>{{t:steps.2.title}}</h3>
+            <p>{{t:steps.2.text}}</p>
+          </li>
+          <li class="step">
+            <span class="step-num">03</span>
+            <span class="step-icon tone-orange"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video"/></svg></span>
+            <h3>{{t:steps.3.title}}</h3>
+            <p>{{t:steps.3.text}}</p>
+          </li>
+        </ol>
+      </section>
+
+      <!-- Safety lab -->
+      <section class="section safety">
+        <div class="safety-head">
+          <p class="kicker">{{t:safety.eyebrow}}</p>
+          <h2 class="section-title">{{h:safety.title}}</h2>
+          <p class="section-lead">{{t:safety.text}}</p>
+        </div>
+        <div class="safety-grid">
+          <article class="safety-card">
+            <span class="tile-icon tone-danger"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-flag"/></svg></span>
+            <h3>{{t:safety.report.title}}</h3>
+            <p>{{t:safety.report.text}}</p>
+          </article>
+          <article class="safety-card">
+            <span class="tile-icon tone-violet"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-eye-off"/></svg></span>
+            <h3>{{t:safety.blur.title}}</h3>
+            <p>{{t:safety.blur.text}}</p>
+          </article>
+          <article class="safety-card">
+            <span class="tile-icon tone-orange"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-ban"/></svg></span>
+            <h3>{{t:safety.bans.title}}</h3>
+            <p>{{t:safety.bans.text}}</p>
+          </article>
+          <article class="safety-card">
+            <span class="tile-icon tone-mint"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-link-2-off"/></svg></span>
+            <h3>{{t:safety.spam.title}}</h3>
+            <p>{{t:safety.spam.text}}</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Find your people -->
+      <section class="section world">
+        <p class="kicker">{{t:world.eyebrow}}</p>
+        <h2 class="section-title">{{h:world.title}}</h2>
+        <p class="section-lead">{{t:world.text}}</p>
+        <ul class="interest-cloud" role="list">{{{INTEREST_PILLS}}}</ul>
+        <div class="flag-rows" aria-hidden="true">
+          <div class="flag-row"><div class="flag-track">{{{FLAGS_A}}}</div></div>
+          <div class="flag-row flag-row-reverse"><div class="flag-track">{{{FLAGS_B}}}</div></div>
+        </div>
+      </section>
+
+      <!-- Call to action -->
+      <section class="cta-band">
+        <button type="button" class="cta-card" data-start="video">
+          <span class="cta-eyebrow">{{t:cta.eyebrow}}</span>
+          <span class="cta-title">{{t:cta.title}}<svg class="icon flip-rtl" aria-hidden="true"><use href="/icons.svg#i-arrow-right"/></svg></span>
+          <span class="sticker sticker-cam" aria-hidden="true"><svg class="icon"><use href="/icons.svg#i-heart"/></svg></span>
+          <span class="sticker sticker-chat" aria-hidden="true"><i></i><i></i><i></i></span>
+        </button>
+      </section>
+
+      <!-- FAQ -->
+      <section class="section faq">
+        <h2 class="section-title">{{h:faq.title}}</h2>
+        <div class="faq-list">
+          <details class="faq-item"><summary>{{t:faq.q1}}<svg class="icon" aria-hidden="true"><use href="/icons.svg#i-plus"/></svg></summary><p>{{t:faq.a1}}</p></details>
+          <details class="faq-item"><summary>{{t:faq.q2}}<svg class="icon" aria-hidden="true"><use href="/icons.svg#i-plus"/></svg></summary><p>{{t:faq.a2}}</p></details>
+          <details class="faq-item"><summary>{{t:faq.q3}}<svg class="icon" aria-hidden="true"><use href="/icons.svg#i-plus"/></svg></summary><p>{{t:faq.a3}}</p></details>
+          <details class="faq-item"><summary>{{t:faq.q4}}<svg class="icon" aria-hidden="true"><use href="/icons.svg#i-plus"/></svg></summary><p>{{t:faq.a4}}</p></details>
+          <details class="faq-item"><summary>{{t:faq.q5}}<svg class="icon" aria-hidden="true"><use href="/icons.svg#i-plus"/></svg></summary><p>{{t:faq.a5}}</p></details>
+        </div>
       </section>
     </main>
 
@@ -165,11 +225,153 @@
     </footer>
   </div>
 
+  <!-- ===================================================== SIGN IN -->
+  <div class="view view-auth" id="view-auth" hidden>
+    <header class="app-topbar">
+      <button type="button" class="topbar-home" data-back aria-label="{{t:btn.back}}">
+        <svg class="icon flip-rtl" aria-hidden="true"><use href="/icons.svg#i-chevron-left"/></svg>
+        <span class="brand brand-sm">{{{LOGO}}}<span class="brand-name">{{APP_NAME}}</span></span>
+      </button>
+    </header>
+    <main class="auth">
+      <div class="auth-panel">
+        <h1 class="auth-title">{{t:auth.title}}</h1>
+        <p class="auth-sub">{{t:auth.subtitle}}</p>
+
+        <div class="google-slot" id="google-slot" hidden></div>
+        <p class="auth-error" id="auth-error" role="alert" hidden></p>
+        <button type="button" class="link-btn" id="auth-more" hidden>{{t:auth.more}}</button>
+
+        <div class="email-auth" id="email-auth" hidden>
+          <div class="tabs" role="tablist">
+            <button type="button" role="tab" class="tab" data-tab="signin" aria-selected="true">{{t:auth.tab.signIn}}</button>
+            <button type="button" role="tab" class="tab" data-tab="signup" aria-selected="false">{{t:auth.tab.signUp}}</button>
+          </div>
+          <form class="auth-form" id="auth-form" data-tab="signin" novalidate>
+            <label class="field only-signup">
+              <span class="field-label">{{t:auth.name}}</span>
+              <input class="input" name="name" autocomplete="nickname" maxlength="40">
+            </label>
+            <label class="field">
+              <span class="field-label">{{t:auth.email}}</span>
+              <input class="input" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254">
+            </label>
+            <label class="field">
+              <span class="field-label">{{t:auth.password}}</span>
+              <input class="input" name="password" type="password" autocomplete="current-password" maxlength="200">
+              <span class="field-hint only-signup">{{t:auth.passwordHint}}</span>
+            </label>
+            <button type="submit" class="btn btn-primary btn-lg auth-submit">
+              <span class="only-signin">{{t:auth.submit.signIn}}</span><span class="only-signup">{{t:auth.submit.signUp}}</span>
+            </button>
+          </form>
+        </div>
+
+        <p class="auth-legal">{{l:auth.certify}}</p>
+      </div>
+
+      <div class="auth-brand" aria-hidden="true">
+        <span class="auth-arc"></span>
+        <div class="auth-logo">{{{LOGO}}}<span>{{APP_NAME}}</span></div>
+        <p class="auth-tagline">{{t:brand.tagline}}</p>
+        <svg class="swoosh" viewBox="0 0 220 24"><path d="M4 18C60 6 150 2 216 8"/></svg>
+      </div>
+    </main>
+  </div>
+
+  <!-- ===================================================== LOBBY -->
+  <div class="view view-lobby" id="view-lobby" hidden>
+    <header class="app-topbar">
+      <button type="button" class="topbar-home" data-back aria-label="{{t:btn.back}}">
+        <svg class="icon flip-rtl" aria-hidden="true"><use href="/icons.svg#i-chevron-left"/></svg>
+        <span class="brand brand-sm">{{{LOGO}}}<span class="brand-name">{{APP_NAME}}</span></span>
+      </button>
+      <div class="topbar-actions">
+        <a class="pill-btn" href="/guidelines" target="_blank" rel="noopener">
+          <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-shield-check"/></svg><span>{{t:nav.safety}}</span>
+        </a>
+        <span class="online-pill" data-online-pill hidden><span class="live-dot"></span><span data-online-count></span></span>
+        <div class="account" data-account hidden>
+          <button type="button" class="avatar-btn" aria-haspopup="true" aria-expanded="false" aria-label="{{t:account.menu}}">
+            <img class="avatar-img" alt="" referrerpolicy="no-referrer" hidden><span class="avatar-initial"></span>
+          </button>
+          <div class="account-menu" hidden>
+            <p class="account-name"></p>
+            <p class="account-email"></p>
+            <button type="button" class="account-item" data-signout>
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-log-out"/></svg><span>{{t:nav.signOut}}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main class="lobby">
+      <div class="lobby-card" id="lobby-card" data-mode="video" data-media="none">
+        <div class="lobby-preview">
+          <video id="lobby-video" class="tile-video mirrored" autoplay playsinline muted></video>
+          <div class="tile-layer layer-media">
+            <span class="layer-icon"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video"/></svg></span>
+            <p class="layer-title">{{t:media.title}}</p>
+            <p class="layer-text">{{t:media.text}}</p>
+          </div>
+          <div class="tile-layer layer-textmode">
+            <span class="layer-icon"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-message-circle"/></svg></span>
+            <p class="layer-title">{{t:lobby.textMode}}</p>
+          </div>
+          <span class="tile-label" id="lobby-hello"></span>
+        </div>
+
+        <div class="lobby-panel">
+          <div class="segmented" role="radiogroup" aria-label="{{t:lobby.mode.label}}">
+            <button type="button" role="radio" class="segment" data-mode="video" aria-checked="true">
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video"/></svg>{{t:lobby.mode.video}}
+            </button>
+            <button type="button" role="radio" class="segment" data-mode="text" aria-checked="false">
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-message-circle"/></svg>{{t:lobby.mode.text}}
+            </button>
+          </div>
+
+          <div class="lobby-brand">
+            <div class="auth-logo">{{{LOGO}}}<span>{{APP_NAME}}</span></div>
+            <p class="auth-tagline">{{t:brand.tagline}}</p>
+            <svg class="swoosh" viewBox="0 0 220 24" aria-hidden="true"><path d="M4 18C60 6 150 2 216 8"/></svg>
+          </div>
+
+          <div class="lobby-options">
+            <div class="field">
+              <div class="field-head">
+                <label class="field-label" for="interest-input">{{t:interests.label}}</label>
+                <span class="field-optional">{{t:interests.optional}}</span>
+              </div>
+              <div class="tag-input" id="tag-input">
+                <ul class="tag-list" id="tag-list" role="list"></ul>
+                <input id="interest-input" type="text" autocomplete="off" autocapitalize="none" enterkeyhint="done"
+                       maxlength="24" placeholder="{{t:interests.placeholder}}" aria-describedby="interest-hint">
+              </div>
+              <div class="suggestions" id="suggestions">{{{INTEREST_CHIPS}}}</div>
+              <p class="field-hint" id="interest-hint">{{t:interests.hint}}</p>
+            </div>
+            <label class="switch-row">
+              <input type="checkbox" class="switch" id="same-language">
+              <span>{{t:filter.sameLanguage}}</span>
+            </label>
+          </div>
+
+          <button type="button" class="btn btn-primary btn-xl lobby-start" id="lobby-start">
+            <svg class="icon when-video" aria-hidden="true"><use href="/icons.svg#i-video"/></svg>
+            <svg class="icon when-text" aria-hidden="true"><use href="/icons.svg#i-message-circle"/></svg>
+            <span class="when-video">{{t:start.video}}</span><span class="when-text">{{t:start.text}}</span>
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
   <!-- ===================================================== CHAT -->
   <div class="view view-chat" id="view-chat" hidden>
-    <div class="chat-layout" id="chat-layout" data-state="idle" data-mode="video" data-media="none">
+    <div class="chat-layout" id="chat-layout" data-state="idle" data-mode="video" data-media="ready">
       <header class="chat-topbar">
-        <button type="button" class="topbar-home" id="chat-home" aria-label="{{t:btn.home}}" title="{{t:btn.home}}">
+        <button type="button" class="topbar-home" id="chat-home" aria-label="{{t:btn.back}}" title="{{t:btn.back}}">
           <svg class="icon flip-rtl" aria-hidden="true"><use href="/icons.svg#i-chevron-left"/></svg>
           <span class="brand brand-sm">{{{LOGO}}}<span class="brand-name">{{APP_NAME}}</span></span>
         </button>
@@ -224,11 +426,6 @@
 
         <div class="tile tile-local" id="tile-local">
           <video id="local-video" class="tile-video mirrored" autoplay playsinline muted></video>
-          <div class="tile-layer layer-media">
-            <span class="layer-icon"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video"/></svg></span>
-            <p class="layer-title">{{t:media.title}}</p>
-            <p class="layer-text">{{t:media.text}}</p>
-          </div>
           <div class="tile-layer layer-selfoff" id="local-camoff" hidden>
             <span class="layer-icon"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video-off"/></svg></span>
             <p>{{t:self.camOff}}</p>
@@ -291,6 +488,26 @@
   </div>
 
   <!-- ===================================================== DIALOGS -->
+  <dialog class="sheet sheet-guide" id="dlg-guidelines" aria-labelledby="guide-title">
+    <form method="dialog" class="sheet-body sheet-center" id="guide-form">
+      <button class="icon-btn sheet-close" value="close" formnovalidate aria-label="{{t:btn.close}}">
+        <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-x"/></svg>
+      </button>
+      <span class="guide-logo">{{{LOGO}}}</span>
+      <h2 id="guide-title">{{t:guide.title}}</h2>
+      <p class="sheet-text" id="guide-intro">{{t:guide.intro}}</p>
+      <div class="guide-checks">
+        <label class="check-row"><input type="checkbox" class="check" name="age"><span>{{t:guide.age}}</span></label>
+        <label class="check-row"><input type="checkbox" class="check" name="terms"><span>{{l:guide.terms}}</span></label>
+      </div>
+      <p class="form-error" id="guide-error" role="alert" hidden>{{t:guide.required}}</p>
+      <footer class="sheet-foot sheet-foot-stack">
+        <button class="btn btn-primary btn-lg" value="agree">{{t:guide.agree}}</button>
+        <button class="btn btn-outline btn-lg" value="disagree" formnovalidate>{{t:guide.disagree}}</button>
+      </footer>
+    </form>
+  </dialog>
+
   <dialog class="sheet" id="dlg-report" aria-labelledby="report-title">
     <form method="dialog" class="sheet-body" id="report-form">
       <header class="sheet-head">

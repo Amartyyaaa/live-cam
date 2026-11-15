@@ -78,6 +78,16 @@ export function loadConfig(env = process.env) {
       forceRelay: readBool(env, 'FORCE_RELAY', false),
     },
 
+    auth: {
+      // Users must sign in (and accept the guidelines) before chatting.
+      required: readBool(env, 'REQUIRE_SIGN_IN', true),
+      // OAuth client ID from Google Cloud Console → enables "Sign in with Google".
+      googleClientId: (env.GOOGLE_CLIENT_ID || '').trim(),
+      allowEmail: readBool(env, 'ALLOW_EMAIL_SIGNUP', true),
+      sessionDays: readInt(env, 'SESSION_DAYS', 30, { min: 1, max: 365 }),
+      attemptsPerMinute: readInt(env, 'AUTH_ATTEMPTS_PER_MINUTE', 10, { min: 1, max: 100000 }),
+    },
+
     matching: {
       // How long someone with interests waits for a shared-interest match
       // before we fall back to a random stranger (Omegle-style).

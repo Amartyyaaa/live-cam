@@ -3,18 +3,9 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import compression from 'compression';
+import { readCookie } from './auth.js';
 
 const DOC_PAGES = ['terms', 'privacy', 'guidelines'];
-
-function readCookie(req, name) {
-  const header = req.headers.cookie;
-  if (!header) return null;
-  for (const part of header.split(';')) {
-    const [k, ...v] = part.trim().split('=');
-    if (k === name) return decodeURIComponent(v.join('='));
-  }
-  return null;
-}
 
 function safeEqual(a, b) {
   const ha = crypto.createHash('sha256').update(String(a)).digest();
@@ -22,7 +13,10 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ha, hb);
 }
 
-function securityHeaders() {
+function securityHeaders(config) {
+  // "Sign in with Google" loads Google's script and iframe — only allowed when configured.
+  const google = Boolean(config.auth.googleClientId);
+  const gsi = 'https://accounts.google.com/gsi/';
   return (req, res, next) => {
     // Same-origin websocket URL, spelled out for browsers that don't map 'self' to ws(s).
     const host = String(req.get('host') || '').replace(/[^\w.:[\]-]/g, '');
@@ -31,12 +25,14 @@ function securityHeaders() {
       'Content-Security-Policy',
       [
         "default-src 'self'",
-        "script-src 'self'",
-        "style-src 'self'",
-        "img-src 'self' data: blob:",
+        `script-src 'self'${google ? ` ${gsi}client` : ''}`,
+        // Google's button script sets inline styles on its container; without them it renders broken.
+        `style-src 'self'${google ? ` 'unsafe-inline' ${gsi}style` : ''}`,
+        `img-src 'self' data: blob:${google ? ' https://*.googleusercontent.com' : ''}`,
         "media-src 'self' blob: mediastream:",
         "font-src 'self'",
-        `connect-src 'self'${ws}`,
+        `connect-src 'self'${ws}${google ? ` ${gsi}` : ''}`,
+        `frame-src ${google ? gsi : "'none'"}`,
         "manifest-src 'self'",
         "worker-src 'self'",
         "frame-ancestors 'none'",
@@ -48,7 +44,8 @@ function securityHeaders() {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    // "-allow-popups" keeps the Google sign-in popup working.
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
     res.setHeader(
       'Permissions-Policy',
       'camera=(self), microphone=(self), display-capture=(), geolocation=(), payment=(), usb=(), browsing-topics=()',
@@ -58,7 +55,7 @@ function securityHeaders() {
   };
 }
 
-function adminRouter({ config, moderation, kick }) {
+function adminRouter({ config, moderation, users, kick }) {
   const router = express.Router();
   router.use((req, res, next) => {
     const auth = req.get('authorization') || '';
@@ -76,10 +73,15 @@ function adminRouter({ config, moderation, kick }) {
 
   router.get('/bans', (req, res) => res.json({ bans: moderation.listBans() }));
 
-  // POST /api/admin/bans { "key": "c:<clientId>" | "i:<ipHash>", "hours": 24, "reason": "…" }
+  router.get('/users', (req, res) => {
+    const limit = Math.min(1000, Math.max(1, Number.parseInt(req.query.limit, 10) || 100));
+    res.json({ total: users.size, users: users.list(limit) });
+  });
+
+  // POST /api/admin/bans { "key": "u:<userId>" | "c:<clientId>" | "i:<ipHash>", "hours": 24, "reason": "…" }
   router.post('/bans', (req, res) => {
     const { key, hours = 24, reason = 'manual' } = req.body || {};
-    if (typeof key !== 'string' || !/^[ci]:[\w-]{8,64}$/.test(key)) return res.status(400).json({ error: 'invalid key' });
+    if (typeof key !== 'string' || !/^[uci]:[\w-]{8,64}$/.test(key)) return res.status(400).json({ error: 'invalid key' });
     const h = Number(hours);
     if (!Number.isFinite(h) || h <= 0 || h > 24 * 3650) return res.status(400).json({ error: 'invalid hours' });
     const until = moderation.ban([key], { ms: h * 3_600_000, reason: String(reason).slice(0, 200), source: 'admin' });
@@ -93,14 +95,15 @@ function adminRouter({ config, moderation, kick }) {
 
 /**
  * @param {{ config: any, renderer: import('./render.js').Renderer, publicDir: string,
- *           getStats: (full?: boolean) => any, moderation: any, kick: Function, logger?: Console }} deps
+ *           getStats: (full?: boolean) => any, moderation: any, users: any, authRouter: express.Router,
+ *           kick: Function, logger?: Console }} deps
  */
-export function createWebApp({ config, renderer, publicDir, getStats, moderation, kick, logger = console }) {
+export function createWebApp({ config, renderer, publicDir, getStats, moderation, users, authRouter, kick, logger = console }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
   app.use(compression());
-  app.use(securityHeaders());
+  app.use(securityHeaders(config));
 
   const originOf = (req) => config.publicUrl || `${req.protocol}://${req.get('host')}`;
   const sendHtml = (res, html) => {
@@ -119,14 +122,15 @@ export function createWebApp({ config, renderer, publicDir, getStats, moderation
     res.json(getStats());
   });
 
-  if (config.adminToken) app.use('/api/admin', adminRouter({ config, moderation, kick }));
+  if (config.adminToken) app.use('/api/admin', adminRouter({ config, moderation, users, kick }));
+  app.use('/api', authRouter);
 
   // "/" is English. Visitors whose browser (or saved choice) prefers another
   // supported language are sent to /<lang>; crawlers get English.
   app.get('/', (req, res) => {
     res.vary('Accept-Language');
     res.vary('Cookie');
-    const saved = readCookie(req, 'lang');
+    const saved = readCookie(req.headers.cookie, 'lang');
     const lang = saved && renderer.has(saved) ? saved : renderer.negotiate(req.get('accept-language'));
     if (lang && lang !== 'en') return res.redirect(302, `/${lang}`);
     sendHtml(res, renderer.renderIndex({ lang: 'en', origin: originOf(req) }));

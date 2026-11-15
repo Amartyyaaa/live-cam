@@ -7,15 +7,29 @@ Monkey, rebuilt for a worldwide audience with safety, speed and 12 languages fro
 > [docs/DESIGN.md](docs/DESIGN.md) for the name shortlist and the full UI design system.
 
 <p align="center">
+  <img src="docs/screenshots/home-desktop.jpg" alt="Landing page: the name spelled out of hellos in many languages" width="45%">
+  <img src="docs/screenshots/lobby-desktop.jpg" alt="Lobby: camera preview, video/text switch, interests and Start" width="45%">
+</p>
+<p align="center">
   <img src="docs/screenshots/chat-desktop.jpg" alt="Video chat on desktop" width="66%">
   <img src="docs/screenshots/chat-mobile.jpg" alt="Video chat on a phone" width="24%">
 </p>
 <p align="center">
-  <img src="docs/screenshots/home-desktop.jpg" alt="Landing page" width="45%">
-  <img src="docs/screenshots/home-arabic-rtl.jpg" alt="Arabic, right-to-left" width="45%">
+  <img src="docs/screenshots/signin-desktop.jpg" alt="Sign in or create an account" width="45%">
+  <img src="docs/screenshots/guidelines-dialog.jpg" alt="Community guidelines to accept once" width="45%">
 </p>
 
+**The journey:** landing page → **Start** → sign in (Google or email) → accept the community guidelines (once) →
+lobby with your camera preview → **Start** → meet someone. Nobody is matched until they press Start in the lobby.
+
 ## Features
+
+**Landing & sign-in**
+- ✨ Intro animation: hellos in 30+ languages float in and fly together to spell the brand name (respects reduced motion)
+- 🃏 Rich landing page: illustrated cards band, desktop + phone showcase, how it works, safety, interests & flags, FAQ
+- 🔐 **Sign in with Google** or **email & password** before chatting — throwaway trolls can't just reload, and bans stick to the account
+- ✅ **Community guidelines** (18+, Terms, Privacy, Guidelines) accepted once per account, versioned so you can ask again after changes
+- 🎛️ **Lobby** like a video call's pre-join screen: camera preview, Video/Text switch, interests, language filter, Start
 
 **Chat**
 - 🎥 Peer-to-peer **video** (WebRTC) and **text-only** mode, side-by-side text chat with typing indicator & quick replies
@@ -35,14 +49,15 @@ Monkey, rebuilt for a worldwide audience with safety, speed and 12 languages fro
 - STUN + **TURN** support (self-hosted coturn, any provider, or Cloudflare's global TURN) so strict NATs and mobile carriers connect
 
 **Safety** (the reason Omegle shut down in 2023 — take it seriously)
-- 18+ consent gate, Terms, Privacy Policy and Community Guidelines pages
+- Accounts + 18+ guidelines acceptance before anyone is matched; Terms, Privacy Policy and Community Guidelines pages
 - **Report** button (also works for the person you *just* skipped); reported people are never re-matched with the reporter
-- **Automatic temporary bans** after reports from several different people; bans survive restarts
+- **Automatic temporary bans** after reports from several different people — on the account *and* the browser; bans survive restarts
 - Video **blurs while you're reporting**; optional “blur new people until I tap”
 - Links blocked in chat (anti-spam/scam), message cleaning, rate limits on everything
-- Admin API to review reports (with the last messages of the reported chat) and ban/unban
-- No accounts, no ads/trackers, IPs stored only as keyed hashes; optional `FORCE_RELAY` hides IPs from strangers
-- Strict security headers (CSP without `unsafe-inline`, no framing, camera/mic limited to the site)
+- Admin API to review reports (with the last messages of the reported chat), accounts, and ban/unban
+- Strangers never see names or emails — only a country flag; passwords hashed with scrypt; no ads/trackers;
+  IPs stored only as keyed hashes; optional `FORCE_RELAY` hides IPs from strangers
+- Strict security headers (CSP with no inline scripts, no framing, camera/mic limited to the site), HttpOnly session cookies
 
 ## Quick start
 
@@ -75,8 +90,24 @@ npm start
 > `EPERM: operation not permitted`. Keep the project in a plain folder such as `C:\dev\live-cam`
 > (OneDrive-synced folders and antivirus "controlled folder access" can also block npm).
 
-Open http://localhost:3000 in two different browsers (or one normal + one private window) and click **Start video chat** in both.
+Open http://localhost:3000 in two different browsers (or one normal + one private window). In each one: click
+**Start video chat**, choose **Create account** (any made-up email works locally), tick both boxes and
+**Agree all & continue**, then press **Start video chat** in the lobby.
 Cameras need a secure context: `localhost` works; anything else needs **HTTPS**.
+
+**Updating** an existing copy: stop the server (Ctrl+C), then inside the project folder:
+
+```bash
+git pull
+```
+
+```bash
+npm install
+```
+
+```bash
+npm start
+```
 
 For development with auto-restart:
 
@@ -117,7 +148,12 @@ Everything is set with environment variables — see [`.env.example`](.env.examp
 | `APP_NAME` | `Hiyo` | Brand name on every page, title and the PWA manifest |
 | `PUBLIC_URL` | — | Your site URL (canonical / hreflang / social links, allowed origin) |
 | `CONTACT_EMAIL` | `support@example.com` | Shown on legal pages — **set it** |
-| `SERVER_SECRET` | random per start | Keys the IP hashes; set it so IP bans survive restarts |
+| `REQUIRE_SIGN_IN` | `true` | Sign in + accept the guidelines before chatting (`false` = anonymous, 18+ dialog only) |
+| `GOOGLE_CLIENT_ID` | — | Turns on **Continue with Google** (see [Accounts & sign-in](#accounts--sign-in)) |
+| `ALLOW_EMAIL_SIGNUP` | `true` | Email + password accounts |
+| `SESSION_DAYS` | `30` | How long people stay signed in |
+| `AUTH_ATTEMPTS_PER_MINUTE` | `10` | Sign-in attempts per IP per minute |
+| `SERVER_SECRET` | saved in `DATA_DIR/.secret` | Signs session cookies and keys the IP hashes — keep it stable and secret |
 | `ADMIN_TOKEN` | — | Enables the admin API |
 | `TURN_URLS` + `TURN_SECRET` | — | Your coturn server (time-limited credentials) |
 | `CLOUDFLARE_TURN_KEY_ID` + `CLOUDFLARE_TURN_API_TOKEN` | — | Use Cloudflare's TURN instead |
@@ -126,7 +162,30 @@ Everything is set with environment variables — see [`.env.example`](.env.examp
 | `REPORT_THRESHOLD` / `BAN_HOURS` / `IP_BAN_HOURS` | `3` / `24` / `1` | Auto-ban policy |
 | `BLOCK_LINKS` | `true` | Refuse chat messages containing links |
 | `FORCE_RELAY` | `false` | Send all media through TURN (hides IPs; costs bandwidth) |
-| `DATA_DIR` | `./data` | Where `bans.json` and `reports.jsonl` live |
+| `DATA_DIR` | `./data` | Where `users.json`, `bans.json` and `reports.jsonl` live — back it up |
+
+## Accounts & sign-in
+
+Before anyone is matched they must be signed in and have accepted the community guidelines; the server enforces this
+too, not just the page.
+
+- **Email & password** accounts are stored in `DATA_DIR/users.json` with scrypt-hashed passwords. There is **no email
+  verification or password reset yet** (both need an email provider). For a public launch either add them, or set
+  `ALLOW_EMAIL_SIGNUP=false` and offer Google sign-in only.
+- **Continue with Google** — create a client ID (free):
+  1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → OAuth consent screen**: set it up
+     (app name, support email; the default scopes are enough).
+  2. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application.**
+  3. Under **Authorized JavaScript origins** add `http://localhost:3000` and `http://localhost` for testing, plus your
+     real site, e.g. `https://hiyo.example`.
+  4. Set `GOOGLE_CLIENT_ID=<the id>.apps.googleusercontent.com` and restart. The sign-in page then shows the Google
+     button, with email under **More sign-in options**.
+
+  The server checks Google's signature, audience and expiry on every sign-in itself — no client secret or SDK needed.
+- **Sessions** are an HttpOnly, SameSite cookie signed with `SERVER_SECRET`, valid for `SESSION_DAYS`.
+- **Guidelines** acceptance is stored per account with a version number (`GUIDELINES_VERSION` in `server/users.js`):
+  bump it after changing the rules and everyone is asked again.
+- Strangers only ever see a country flag — never a name, email or photo.
 
 ## Deploying
 
@@ -199,16 +258,21 @@ curl -H "Authorization: Bearer $ADMIN_TOKEN" https://hiyo.example/api/admin/repo
 ```
 
 ```bash
+curl -H "Authorization: Bearer $ADMIN_TOKEN" https://hiyo.example/api/admin/users?limit=50
+```
+
+```bash
 curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"key":"c:<clientId from a report>","hours":720,"reason":"nudity"}' \
+  -d '{"key":"u:<userId from a report>","hours":720,"reason":"nudity"}' \
   https://hiyo.example/api/admin/bans
 ```
 
 ```bash
-curl -X DELETE -H "Authorization: Bearer $ADMIN_TOKEN" https://hiyo.example/api/admin/bans/c:<clientId>
+curl -X DELETE -H "Authorization: Bearer $ADMIN_TOKEN" https://hiyo.example/api/admin/bans/u:<userId>
 ```
 
-Ban keys are `c:<clientId>` (one browser) or `i:<ipHash>` (a network — use sparingly; many people can share one IP).
+Ban keys are `u:<userId>` (an account), `c:<clientId>` (one browser) or `i:<ipHash>` (a network — use sparingly;
+many people can share one IP).
 
 ## ⚠️ Before you launch publicly
 
@@ -216,7 +280,8 @@ Anonymous video chat with strangers attracts abuse. Omegle shut down in November
 the cost of fighting misuse. Plan for it from day one:
 
 - [ ] **HTTPS** everywhere and a **TURN** server
-- [ ] Set `SERVER_SECRET`, `ADMIN_TOKEN`, `CONTACT_EMAIL`, `PUBLIC_URL`; mount a persistent `DATA_DIR`
+- [ ] Set `SERVER_SECRET`, `ADMIN_TOKEN`, `CONTACT_EMAIL`, `PUBLIC_URL`; mount a persistent, backed-up `DATA_DIR`
+- [ ] Set up **Google sign-in**, and add email verification + password reset or turn email sign-up off
 - [ ] **Have a lawyer review** the Terms, Privacy Policy and Guidelines (in `server/views/docs/`) for every market you
       target, and translate them. Laws that may apply include the EU Digital Services Act and GDPR, the UK Online Safety Act,
       US federal law requiring providers to report child sexual abuse material to NCMEC, Australia's Online Safety Act,
@@ -231,6 +296,7 @@ the cost of fighting misuse. Plan for it from day one:
 - **One instance** comfortably handles thousands of concurrent users (signalling is tiny; media is peer-to-peer).
 - **Several instances**: the matchmaking queue lives in memory. Move it to Redis (the `Matchmaker` class is pure
   and isolated for exactly this) and add the Socket.IO Redis adapter, with sticky sessions for the polling fallback.
+  Accounts live in one JSON file (`UserStore`): move them to a database such as PostgreSQL at the same time.
 - **Bandwidth** goes almost entirely to TURN: budget roughly 0.5–1 Mbps per relayed participant.
 
 ## Languages
@@ -244,7 +310,7 @@ Each language is one JSON file in [`locales/`](locales). To add one:
 
 ## Renaming the brand
 
-Set `APP_NAME`. The logo is two overlapping circles (you + a stranger) drawn in code: its colours are the `--brand`,
+Set `APP_NAME` — the intro animation spells whatever name you choose. The logo is two overlapping circles (you + a stranger) drawn in code: its colours are the `--brand`,
 `--violet` and `--sun` tokens in `public/css/app.css`; update `public/favicon.svg` and run `npm run gen:images` to rebuild
 the PNG icons and the social-preview image.
 
@@ -254,17 +320,19 @@ the PNG icons and the social-preview image.
 npm test
 ```
 
-51 unit and integration tests (matchmaking, moderation, sanitising, TURN credentials, geo, real Socket.IO clients
-against the real server, HTTP security headers, admin API).
+Unit and integration tests: matchmaking, moderation, sanitising, TURN credentials, geo, accounts (password hashing,
+sessions, Google token checks, guidelines), real Socket.IO clients against the real server, HTTP security headers,
+admin API.
 
 ```bash
 npm run test:e2e
 ```
 
-End-to-end: real Chromium browsers with fake cameras connect through the real server — matching, peer-to-peer video,
-chat, link blocking, skipping, reporting & bans, text mode, RTL and the back button. Needs Playwright
+End-to-end: real Chromium browsers with fake cameras go through the whole journey on the real server — intro,
+sign-up, guidelines, lobby, matching, peer-to-peer video, chat, link blocking, skipping, reporting & account bans,
+sign out / sign in, text mode, RTL and the back button. Needs Playwright
 (`npm i -D playwright && npx playwright install chromium`).
-`npm run screenshots` regenerates `docs/screenshots/`.
+`npm run screenshots` regenerates `docs/screenshots/`; `npm run gen:landing` redraws the landing-page illustrations.
 
 ## Project structure
 
@@ -275,12 +343,16 @@ server/
   chat-server.js    sessions, pairing, signalling & message relay, reports
   matchmaker.js     the matching queue (pure, unit-tested)
   moderation.js     reports, strikes, bans, persistence
+  auth.js           sign-in API, session cookies, Google ID-token checks
+  users.js          accounts store (scrypt passwords, guidelines acceptance)
   web.js            pages, security headers, admin API
   render.js         server-side i18n templating
-  ice.js geo.js sanitize.js rate-limit.js config.js
+  ice.js geo.js sanitize.js rate-limit.js client-ip.js config.js
   views/            HTML templates (+ legal docs)
 public/
-  js/               browser modules: main, chat, peer (WebRTC), media, home, i18n…
+  js/               browser modules: main (screens), intro (word-cloud animation), account (sign-in &
+                    guidelines), lobby, camera, chat, peer (WebRTC), media, i18n…
+  img/              landing-page illustrations and device mockups
   css/app.css       the design system
   fonts/ icons/     self-hosted fonts, Lucide icon sprite, app icons
 locales/            one JSON file per language
@@ -296,3 +368,4 @@ docs/               design system, screenshots
 [Bricolage Grotesque](https://github.com/ateliertriay/bricolage) (OFL) ·
 flag font from [country-flag-emoji-polyfill](https://github.com/talkjs/country-flag-emoji-polyfill) with
 [Twemoji](https://github.com/twitter/twemoji) artwork (CC-BY 4.0). See [`public/fonts/LICENSES.md`](public/fonts/LICENSES.md).
+The illustrated people are original drawings generated by `scripts/gen-landing-assets.cjs`.

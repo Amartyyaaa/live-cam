@@ -17,6 +17,7 @@ before(async () => {
     REPORT_THRESHOLD: '1',
     ADMIN_TOKEN: 'admin-secret',
     CONNECTIONS_PER_MINUTE: '1000',
+    AUTH_ATTEMPTS_PER_MINUTE: '100000',
   });
   server = createServer(config, { logger: quiet, store: null });
   const { port } = await server.listen(0, '127.0.0.1');
@@ -28,10 +29,39 @@ after(async () => {
   await server.close();
 });
 
-function client({ clientId = crypto.randomUUID(), tz = 'Europe/Berlin', lang = 'en' } = {}) {
-  const socket = connect(base, { auth: { clientId, tz, lang }, transports: ['websocket'], forceNew: true, reconnection: false });
+const JSON_HEADERS = { 'content-type': 'application/json' };
+
+/** Signs up a fresh account (optionally accepting the guidelines); returns its cookie. */
+async function account({ url = base, accept = true, name = 'Tester' } = {}) {
+  const res = await fetch(`${url}/api/auth/signup`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ name, email: `${crypto.randomUUID()}@example.com`, password: 'password123' }),
+  });
+  assert.equal(res.status, 201);
+  const cookie = res.headers.get('set-cookie').split(';')[0];
+  if (accept) {
+    const ok = await fetch(`${url}/api/me/guidelines`, {
+      method: 'POST',
+      headers: { ...JSON_HEADERS, cookie },
+      body: JSON.stringify({ age: true, terms: true }),
+    });
+    assert.equal(ok.status, 200);
+  }
+  return cookie;
+}
+
+function client({ clientId = crypto.randomUUID(), tz = 'Europe/Berlin', lang = 'en', cookie, url = base, headers = {} } = {}) {
+  const socket = connect(url, {
+    auth: { clientId, tz, lang },
+    transports: ['websocket'],
+    forceNew: true,
+    reconnection: false,
+    extraHeaders: { ...headers, ...(cookie ? { cookie } : {}) },
+  });
   sockets.push(socket);
   socket.clientId = clientId;
+  socket.cookie = cookie;
   return socket;
 }
 
@@ -54,8 +84,10 @@ const nothing = (socket, event, ms = 300) =>
     }, ms);
   });
 
-async function ready(opts) {
-  const socket = client(opts);
+/** A connected, signed-in user who accepted the guidelines (pass cookie: null for a guest). */
+async function ready(opts = {}) {
+  const cookie = opts.cookie === undefined ? await account({ url: opts.url }) : opts.cookie;
+  const socket = client({ ...opts, cookie });
   socket.hello = await once(socket, 'hello');
   return socket;
 }
@@ -71,6 +103,55 @@ async function pair(mode = 'video', a, b) {
   ]);
   return { a, b, ma, mb };
 }
+
+describe('accounts', () => {
+  test('guests can connect (live count) but must sign in to be matched', async () => {
+    const guest = await ready({ cookie: null });
+    assert.ok(guest.hello.online >= 1);
+    assert.deepEqual(await guest.emitWithAck('find', { mode: 'video' }), { ok: false, error: 'auth_required' });
+  });
+
+  test('signed-in users must accept the guidelines first', async () => {
+    const cookie = await account({ accept: false });
+    const s = await ready({ cookie });
+    assert.deepEqual(await s.emitWithAck('find', { mode: 'video' }), { ok: false, error: 'guidelines_required' });
+    const me = await (await fetch(`${base}/api/me`, { headers: { cookie } })).json();
+    assert.equal(me.user.guidelinesAccepted, false);
+    const refused = await fetch(`${base}/api/me/guidelines`, {
+      method: 'POST',
+      headers: { ...JSON_HEADERS, cookie },
+      body: JSON.stringify({ age: true, terms: false }),
+    });
+    assert.equal(refused.status, 400);
+  });
+
+  test('sign in, sign out, wrong password', async () => {
+    const email = `${crypto.randomUUID()}@example.com`;
+    const signup = await fetch(`${base}/api/auth/signup`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name: 'Sam', email, password: 'password123' }),
+    });
+    assert.match(signup.headers.get('set-cookie'), /HttpOnly; SameSite=Lax/);
+    const bad = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ email, password: 'nope-nope' }) });
+    assert.deepEqual([bad.status, (await bad.json()).error], [401, 'invalid']);
+    const good = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ email, password: 'password123' }) });
+    assert.equal((await good.json()).user.name, 'Sam');
+    const out = await fetch(`${base}/api/auth/logout`, { method: 'POST', headers: JSON_HEADERS, body: '{}' });
+    assert.match(out.headers.get('set-cookie'), /Max-Age=0/);
+  });
+
+  test('state-changing auth requests from other sites are refused', async () => {
+    const res = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: { ...JSON_HEADERS, origin: 'https://evil.example' },
+      body: JSON.stringify({ email: 'a@b.co', password: 'x' }),
+    });
+    assert.equal(res.status, 403);
+    const form = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'x' });
+    assert.equal(form.status, 415);
+  });
+});
 
 describe('realtime', () => {
   test('hello carries ICE servers, country and the online count', async () => {
@@ -155,6 +236,18 @@ describe('realtime', () => {
     const err = await once(again, 'connect_error');
     assert.equal(err.data.code, 'banned');
 
+    // A new browser doesn't help: the account itself is banned…
+    const newDevice = client({ cookie: b.cookie });
+    assert.equal((await once(newDevice, 'connect_error')).data.code, 'banned');
+    // …and so is signing in again.
+    const me = await (await fetch(`${base}/api/me`, { headers: { cookie: b.cookie } })).json();
+    const login = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ email: me.user.email, password: 'password123' }),
+    });
+    assert.deepEqual([login.status, (await login.json()).error], [403, 'banned']);
+
     // The reporter shares the test machine's IP and must NOT be affected.
     assert.equal(a.connected, true);
     const fresh = await ready();
@@ -194,17 +287,11 @@ describe('realtime', () => {
     const cdn = createServer(config, { logger: quiet, store: null });
     const { port } = await cdn.listen(0, '127.0.0.1');
     const url = `http://127.0.0.1:${port}`;
-    const make = (ip) =>
-      connect(url, {
-        auth: { clientId: crypto.randomUUID() },
-        transports: ['websocket'],
-        forceNew: true,
-        reconnection: false,
-        extraHeaders: { 'cf-connecting-ip': ip },
-      });
+    const make = (ip, cookie) => client({ url, cookie, headers: { 'cf-connecting-ip': ip } });
     try {
-      const a = make('198.51.100.1');
-      const b = make('198.51.100.2');
+      const [cookieA, cookieB] = await Promise.all([account({ url }), account({ url })]);
+      const a = make('198.51.100.1', cookieA);
+      const b = make('198.51.100.2', cookieB);
       await Promise.all([once(a, 'hello'), once(b, 'hello')]);
       const [ma] = await Promise.all([once(a, 'matched'), once(b, 'matched'), a.emitWithAck('find', { mode: 'text' }), b.emitWithAck('find', { mode: 'text' })]);
       await a.emitWithAck('report', { pairId: ma.pairId, reason: 'spam' });
@@ -233,12 +320,12 @@ describe('http', () => {
     const res = await fetch(`${base}/es`);
     assert.equal(res.status, 200);
     const html = await res.text();
-    assert.match(html, /<html lang="es" dir="ltr">/);
+    assert.match(html, /<html lang="es" dir="ltr"[ >]/);
     assert.match(html, /Saluda al <em>mundo<\/em>/);
     assert.match(html, /hreflang="ar" href="[^"]+\/ar"/);
     assert.match(html, /hreflang="x-default"/);
     const ar = await (await fetch(`${base}/ar`)).text();
-    assert.match(ar, /<html lang="ar" dir="rtl">/);
+    assert.match(ar, /<html lang="ar" dir="rtl"[ >]/);
   });
 
   test('"/" redirects to the browser language unless a language was chosen', async () => {
@@ -260,6 +347,20 @@ describe('http', () => {
     assert.equal(res.headers.get('x-frame-options'), 'DENY');
     assert.match(res.headers.get('permissions-policy'), /camera=\(self\)/);
     assert.equal(res.headers.get('x-powered-by'), null);
+  });
+
+  test('Google sign-in widens the CSP only for Google\'s button', async () => {
+    const google = createServer(loadConfig({ GOOGLE_CLIENT_ID: 'test.apps.googleusercontent.com' }), { logger: quiet, store: null });
+    const { port } = await google.listen(0, '127.0.0.1');
+    try {
+      const csp = (await fetch(`http://127.0.0.1:${port}/`)).headers.get('content-security-policy');
+      assert.match(csp, /script-src 'self' https:\/\/accounts\.google\.com\/gsi\/client;/);
+      assert.match(csp, /style-src 'self' 'unsafe-inline' https:\/\/accounts\.google\.com\/gsi\/style;/);
+      assert.match(csp, /frame-src https:\/\/accounts\.google\.com\/gsi\/;/);
+      assert.doesNotMatch(csp.split('; ').find((d) => d.startsWith('script-src')), /unsafe/);
+    } finally {
+      await google.close();
+    }
   });
 
   test('legal pages, manifest, sitemap and 404', async () => {

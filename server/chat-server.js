@@ -20,12 +20,13 @@
 // through TURN). The server only introduces people and relays small messages.
 
 import crypto from 'node:crypto';
-import proxyaddr from 'proxy-addr';
 import { Matchmaker } from './matchmaker.js';
-import { clientKey, ipKey } from './moderation.js';
+import { clientKey, ipKey, primaryKey, userKey } from './moderation.js';
 import { KeyedLimiter, TokenBucket } from './rate-limit.js';
-import { REPORT_REASONS, cleanInterests, cleanLang, cleanMessage, cleanSignal, ipBucket, isUuid } from './sanitize.js';
+import { REPORT_REASONS, cleanInterests, cleanLang, cleanMessage, cleanSignal, isUuid } from './sanitize.js';
 import { detectCountry } from './geo.js';
+import { sessionUserId } from './auth.js';
+import { GUIDELINES_VERSION } from './users.js';
 
 const TRANSCRIPT_SIZE = 30;
 
@@ -40,9 +41,10 @@ const noop = () => {};
 /**
  * @param {import('socket.io').Server} io
  * @param {{ config: any, ice: import('./ice.js').IceProvider, moderation: import('./moderation.js').Moderation,
- *           trustFn: (addr: string, i: number) => boolean, logger?: Console, now?: () => number }} deps
+ *           users: import('./users.js').UserStore, ipHashOf: (req: any) => string,
+ *           logger?: Console, now?: () => number }} deps
  */
-export function attachChat(io, { config, ice, moderation, trustFn, logger = console, now = Date.now }) {
+export function attachChat(io, { config, ice, moderation, users, ipHashOf, logger = console, now = Date.now }) {
   const matchmaker = new Matchmaker({ interestWaitMs: config.matching.interestWaitMs, now });
   /** @type {Map<string, any>} */
   const sessions = new Map();
@@ -54,42 +56,24 @@ export function attachChat(io, { config, ice, moderation, trustFn, logger = cons
     now,
   });
 
-  // Real client IP: a header set by your CDN (CLIENT_IP_HEADER, e.g.
-  // cf-connecting-ip), else X-Forwarded-For from trusted proxies, else the socket.
-  function clientIp(req) {
-    if (config.clientIpHeader) {
-      const value = req.headers[config.clientIpHeader];
-      const first = (Array.isArray(value) ? value[0] : value)?.split(',')[0].trim();
-      if (first) return first;
-    }
-    try {
-      return proxyaddr(req, trustFn);
-    } catch {
-      return req.socket?.remoteAddress;
-    }
-  }
-
-  const hashIp = (ip) =>
-    crypto
-      .createHmac('sha256', config.secret)
-      .update(String(ip || 'unknown'))
-      .digest('base64url')
-      .slice(0, 22);
-
   // ---------------------------------------------------------------- handshake
+  // Anyone may connect (the landing page shows the live count); the session
+  // cookie, if present, tells us which account this is.
   io.use((socket, next) => {
     const req = socket.request;
-    const ipHash = hashIp(ipBucket(clientIp(req)));
+    const ipHash = ipHashOf(req);
     if (!connectionLimiter.take(ipHash)) return next(connectError('rate_limited'));
 
     const auth = socket.handshake.auth || {};
     const clientId = isUuid(auth.clientId) ? auth.clientId.toLowerCase() : crypto.randomUUID();
-    const ban = moderation.isBanned({ clientId, ipHash });
+    const userId = users.get(sessionUserId(req, config.secret))?.id ?? null;
+    const ban = moderation.isBanned({ clientId, ipHash, userId });
     if (ban) return next(connectError('banned', { until: ban.until }));
 
     socket.data.identity = {
       clientId,
       ipHash,
+      userId,
       country: detectCountry(req.headers, typeof auth.tz === 'string' ? auth.tz : undefined),
       lang: cleanLang(auth.lang) || 'en',
     };
@@ -99,10 +83,13 @@ export function attachChat(io, { config, ice, moderation, trustFn, logger = cons
   // --------------------------------------------------------------- helpers
   const other = (pair, s) => (pair.a === s ? pair.b : pair.a);
 
+  // keys[0] is the person (account or browser); all keys are checked against avoid lists.
+  const keysOf = (x) => [...new Set([primaryKey(x), clientKey(x.clientId), ipKey(x.ipHash)])];
+
   function candidateOf(s) {
     return {
       id: s.id,
-      keys: [clientKey(s.clientId), ipKey(s.ipHash)],
+      keys: keysOf(s),
       mode: s.prefs.mode,
       interests: s.prefs.interests,
       lang: s.lang,
@@ -135,7 +122,7 @@ export function attachChat(io, { config, ice, moderation, trustFn, logger = cons
   }
 
   function rememberPartner(me, partner, pair) {
-    const key = clientKey(partner.clientId);
+    const key = primaryKey(partner);
     const limit = config.matching.recentPartners;
     if (limit > 0) {
       me.recent.push(key);
@@ -146,6 +133,7 @@ export function attachChat(io, { config, ice, moderation, trustFn, logger = cons
       }
     }
     me.last = {
+      userId: partner.userId,
       clientId: partner.clientId,
       ipHash: partner.ipHash,
       country: partner.country,
@@ -186,7 +174,7 @@ export function attachChat(io, { config, ice, moderation, trustFn, logger = cons
   function kick(keys, until) {
     const wanted = new Set(keys);
     for (const s of sessions.values()) {
-      if (!wanted.has(clientKey(s.clientId)) && !wanted.has(ipKey(s.ipHash))) continue;
+      if (!keysOf(s).some((key) => wanted.has(key)) && !(s.userId && wanted.has(userKey(s.userId)))) continue;
       matchmaker.remove(s.id);
       if (s.pair) endPair(s, 'left');
       s.state = 'idle';
@@ -241,6 +229,12 @@ export function attachChat(io, { config, ice, moderation, trustFn, logger = cons
     socket.on('find', (payload, ack) => {
       const reply = typeof ack === 'function' ? ack : noop;
       if (!s.limits.find.take()) return reply({ ok: false, error: 'rate_limited' });
+      if (config.auth.required) {
+        // Matching needs an account that agreed to the current guidelines.
+        const user = users.get(s.userId);
+        if (!user) return reply({ ok: false, error: 'auth_required' });
+        if (user.guidelinesVersion !== GUIDELINES_VERSION) return reply({ ok: false, error: 'guidelines_required' });
+      }
       const mode = payload?.mode === 'text' ? 'text' : payload?.mode === 'video' ? 'video' : null;
       if (!mode) return reply({ ok: false, error: 'invalid' });
       s.prefs = {
@@ -308,24 +302,24 @@ export function attachChat(io, { config, ice, moderation, trustFn, logger = cons
       if (!s.limits.report.take()) return reply({ ok: false, error: 'rate_limited' });
       target.reported = true;
 
-      // The reporter never meets this person (device or network) again.
-      for (const key of [clientKey(target.clientId), ipKey(target.ipHash)]) {
+      // The reporter never meets this person (account, device or network) again.
+      for (const key of keysOf(target)) {
         s.blocked.add(key);
         s.avoid.add(key);
       }
 
       const result = moderation.report({
-        reporter: { clientId: s.clientId, ipHash: s.ipHash },
-        target: { clientId: target.clientId, ipHash: target.ipHash, country: target.country },
+        reporter: { userId: s.userId, clientId: s.clientId, ipHash: s.ipHash },
+        target: { userId: target.userId, clientId: target.clientId, ipHash: target.ipHash, country: target.country },
         reason,
         mode: target.mode,
         transcript: transcriptFor(target.pair, s),
       });
       if (result.banned) {
         logger.info?.(`[moderation] auto-ban after ${result.strikes} reports`);
-        // Only the offender's browser is disconnected; an IP ban (if any) just
-        // stops new connections for a short while.
-        kick([clientKey(target.clientId)], result.until);
+        // Only the offender (account + browser) is disconnected; an IP ban (if
+        // any) just stops new connections for a short while.
+        kick([primaryKey(target), clientKey(target.clientId)], result.until);
       }
       reply({ ok: true });
     });

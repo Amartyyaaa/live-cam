@@ -51,44 +51,24 @@ async function main() {
     await icon('icons/apple-touch-icon.png', 180, { rounded: false, scale: 0.92 }); // iOS rounds corners itself
 
     // ------------------------------------------------------------- og image
-    const og = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
-    await og.goto(base + '/', { waitUntil: 'networkidle' });
-    const visual = await og.$eval('.hero-visual', (el) => el.outerHTML);
-    const logo = await og.$eval('.site-header .logo-mark', (el) => el.outerHTML);
-    const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-      <link rel="stylesheet" href="/css/app.css">
-      <style>
-        *, *::before, *::after { animation: none !important; }
-        html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
-        .og {
-          display: grid; grid-template-columns: 1fr 500px; align-items: center; gap: 24px;
-          width: 1200px; height: 630px; padding: 0 64px 0 76px; box-sizing: border-box;
-          background:
-            radial-gradient(55% 75% at 84% 52%, rgba(124, 92, 255, .16), transparent 70%),
-            radial-gradient(45% 60% at 4% 0%, rgba(255, 91, 46, .2), transparent 70%),
-            #fff6ee;
-          color-scheme: light;
-        }
-        .og .brand { font-size: 46px; color: #1d1426; }
-        .og h1 { margin: 34px 0 20px; font-family: var(--font-display); font-size: 96px; font-weight: 800;
-                 line-height: .95; letter-spacing: -0.045em; color: #1d1426; }
-        .og h1 em { font-style: normal; background: linear-gradient(100deg, #ff5b2e 5%, #ff2e7a 50%, #7c5cff 95%);
-                    -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .og p { max-width: 540px; font-size: 29px; line-height: 1.35; color: #5b5066; }
-        .og .hero-visual { width: 500px; }
-        .og .orbit { --spin: 0s; }
-      </style></head><body>
-      <div class="og">
-        <div>
-          <span class="brand">${logo}<span>${config.appName}</span></span>
-          <h1>Say hi to the <em>world</em>.</h1>
-          <p>Free random video chat with people from every corner of the planet.</p>
-        </div>
-        ${visual}
-      </div></body></html>`;
-    await og.route(base + '/__og', (route) => route.fulfill({ contentType: 'text/html; charset=utf-8', body: html }));
-    await og.goto(base + '/__og', { waitUntil: 'networkidle' });
-    await og.evaluate(() => document.fonts.ready);
+    // The real landing hero (word-cloud intro + headline) without the buttons.
+    const og = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1, locale: 'en-US', bypassCSP: true });
+    const ogCss = `
+      .header-actions, .intro-actions, .scroll-cue, .band { display: none !important; }
+      .intro-copy { opacity: 1 !important; transform: none !important; animation: none !important; }
+      .intro-title { font-size: 92px !important; }
+      .intro-sub { font-size: 26px !important; }`;
+    await og.route(`${base}/`, async (route) => {
+      const res = await route.fetch();
+      const body = (await res.text()).replace('</head>', `<style>${ogCss}</style></head>`);
+      const headers = { ...res.headers() };
+      delete headers['content-encoding']; // the body was decompressed by fetch()
+      delete headers['content-length'];
+      await route.fulfill({ status: res.status(), headers, body });
+    });
+    await og.goto(`${base}/`, { waitUntil: 'load' });
+    await og.waitForSelector('#intro.is-formed', { timeout: 15000 });
+    await og.waitForTimeout(1200);
     await og.screenshot({ path: path.join(PUBLIC, 'og-image.png') });
     console.log('  ✓ public/og-image.png');
   } finally {
