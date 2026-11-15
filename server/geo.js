@@ -7,7 +7,17 @@
 
 import { readFileSync } from 'node:fs';
 
-const data = JSON.parse(readFileSync(new URL('./data/geo.json', import.meta.url), 'utf8'));
+function loadGeoData() {
+  try {
+    return JSON.parse(readFileSync(new URL('./data/geo.json', import.meta.url), 'utf8'));
+  } catch (err) {
+    // Flags are a nice-to-have: never refuse to start because of them.
+    console.warn(`[geo] ${err.message} — country flags fall back to CDN headers only (run: npm run gen:geo)`);
+    return { countries: [], tz: {} };
+  }
+}
+
+const data = loadGeoData();
 const COUNTRIES = new Set(data.countries);
 const TZ_TO_COUNTRY = new Map(Object.entries(data.tz));
 
@@ -21,7 +31,9 @@ const GEO_HEADERS = [
 ];
 
 export function isCountryCode(code) {
-  return typeof code === 'string' && COUNTRIES.has(code);
+  if (typeof code !== 'string') return false;
+  if (COUNTRIES.size) return COUNTRIES.has(code);
+  return /^[A-Z]{2}$/.test(code) && code !== 'XX' && code !== 'T1'; // geo.json missing
 }
 
 export function countryFromTimeZone(tz) {
