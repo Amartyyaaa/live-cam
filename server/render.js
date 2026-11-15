@@ -11,6 +11,7 @@
 //   {{NAME}}        HTML-escaped variable
 //   {{{NAME}}}      raw HTML variable (only for markup we build here)
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -94,6 +95,30 @@ const INTEREST_EMOJI = {
 
 export const flagEmoji = (code) => String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65));
 
+// Local images and the icon sprite get "?v=<content hash>" in every page, so browsers can keep them for a year
+// yet always fetch the new file after an update (a stale icons.svg would hide icons that were added since).
+const ASSET_URL = /(\/(?:icons\.svg|favicon\.svg|og-image\.png|(?:img|icons)\/[\w./-]+?\.(?:webp|png|jpg|svg)))(?=[#"')\s])/g;
+
+/** Short hash of every image and SVG in public/, so the version changes whenever any of them does. */
+function hashAssets(publicDir) {
+  const hash = crypto.createHash('sha256');
+  const walk = (dir) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else if (/\.(svg|png|webp|jpg)$/.test(entry.name)) hash.update(`${path.relative(publicDir, file)}\0`).update(fs.readFileSync(file));
+    }
+  };
+  walk(publicDir);
+  return hash.digest('hex').slice(0, 10);
+}
+
 export class Renderer {
   /**
    * @param {{ root: string, config: { appName: string, contactEmail: string, limits: any }, cache?: boolean }} opts
@@ -134,6 +159,7 @@ export class Renderer {
       });
     }
 
+    this.assetVersion = hashAssets(path.join(this.root, 'public'));
     this.templates = {
       index: read('index.html'),
       doc: read('doc.html'),
@@ -144,6 +170,11 @@ export class Renderer {
 
   #fresh() {
     if (!this.cache) this.#load();
+  }
+
+  /** Adds ?v=<assetVersion> to local image / icon URLs in a rendered page. */
+  #versioned(html) {
+    return html.replace(ASSET_URL, `$1?v=${this.assetVersion}`);
   }
 
   get languages() {
@@ -235,6 +266,7 @@ export class Renderer {
       maxInterestLength: this.config.limits.maxInterestLength,
       maxMessageLength: this.config.limits.maxMessageLength,
       interestIds: INTEREST_IDS,
+      icons: `/icons.svg?v=${this.assetVersion}`,
       auth: {
         required: this.config.auth.required,
         google: this.config.auth.googleClientId || null,
@@ -268,7 +300,7 @@ export class Renderer {
       (id) => `<li class="interest-pill"><span aria-hidden="true">${INTEREST_EMOJI[id]}</span>${escapeHtml(t(`interest.${id}`))}</li>`,
     ).join('');
 
-    return fill(this.templates.index, {
+    const html = fill(this.templates.index, {
       t,
       vars: { ...vars, CANONICAL: origin + this.homePath(locale.code) },
       raw: {
@@ -284,6 +316,7 @@ export class Renderer {
         CONFIG_JSON: safeJson(clientConfig),
       },
     });
+    return this.#versioned(html);
   }
 
   renderDoc(name, { origin }) {
@@ -292,17 +325,19 @@ export class Renderer {
     const { t, vars } = this.#shared('en', origin);
     const content = fill(this.templates.docs[name].replace(/<!--[\s\S]*?-->\s*/g, ''), { t, vars });
     const title = /<h1[^>]*>([^<]*)<\/h1>/.exec(content)?.[1] ?? this.config.appName;
-    return fill(this.templates.doc, {
-      t,
-      vars: { ...vars, TITLE: title, CANONICAL: `${origin}/${name}` },
-      raw: { CONTENT: content, LOGO: LOGO_SVG },
-    });
+    return this.#versioned(
+      fill(this.templates.doc, {
+        t,
+        vars: { ...vars, TITLE: title, CANONICAL: `${origin}/${name}` },
+        raw: { CONTENT: content, LOGO: LOGO_SVG },
+      }),
+    );
   }
 
   renderNotFound({ origin }) {
     this.#fresh();
     const { t, vars } = this.#shared('en', origin);
-    return fill(this.templates.notFound, { t, vars, raw: { LOGO: LOGO_SVG } });
+    return this.#versioned(fill(this.templates.notFound, { t, vars, raw: { LOGO: LOGO_SVG } }));
   }
 
   manifest(lang) {

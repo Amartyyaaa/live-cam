@@ -349,6 +349,19 @@ describe('http', () => {
     assert.equal(res.headers.get('x-powered-by'), null);
   });
 
+  test('icons and images are versioned, so an update is never hidden by the browser cache', async () => {
+    const html = await (await fetch(`${base}/`)).text();
+    const version = /\/icons\.svg\?v=(\w+)#i-/.exec(html)?.[1];
+    assert.ok(version, 'icon references carry a content version');
+    assert.doesNotMatch(html, /"\/icons\.svg#|src="\/img\/[^"?]+"/, 'no unversioned icon or image URLs');
+    assert.match(html, new RegExp(`/img/people/1\\.webp\\?v=${version}"`));
+    assert.match(html, new RegExp(`"icons":"/icons\\.svg\\?v=${version}"`), 'scripts get the same sprite URL');
+    const pinned = await fetch(`${base}/icons.svg?v=${version}`);
+    assert.equal(pinned.status, 200);
+    assert.match(pinned.headers.get('cache-control'), /immutable/);
+    assert.match((await fetch(`${base}/icons.svg`)).headers.get('cache-control'), /max-age=0, must-revalidate/);
+  });
+
   test('Google sign-in widens the CSP only for Google\'s button', async () => {
     const google = createServer(loadConfig({ GOOGLE_CLIENT_ID: 'test.apps.googleusercontent.com' }), { logger: quiet, store: null });
     const { port } = await google.listen(0, '127.0.0.1');

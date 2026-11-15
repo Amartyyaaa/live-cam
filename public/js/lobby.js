@@ -139,7 +139,7 @@ export class Lobby {
           const remove = document.createElement('button');
           remove.type = 'button';
           remove.setAttribute('aria-label', t('interests.remove', { tag: interestLabel(tag) }));
-          remove.innerHTML = '<svg class="icon" aria-hidden="true"><use href="/icons.svg#i-x"/></svg>';
+          remove.innerHTML = `<svg class="icon" aria-hidden="true"><use href="${config.icons}#i-x"/></svg>`;
           remove.addEventListener('click', () => {
             this.tags.splice(index, 1);
             save();

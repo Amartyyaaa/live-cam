@@ -164,9 +164,10 @@ export function createWebApp({ config, renderer, publicDir, getStats, moderation
     express.static(publicDir, {
       index: false,
       setHeaders(res, filePath) {
-        if (filePath.endsWith('.woff2')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        else if (/\.(png|ico|webp|jpg)$/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=604800');
-        else if (filePath.endsWith('.svg')) res.setHeader('Cache-Control', 'public, max-age=86400');
+        // Pages link images and icons.svg as "?v=<content hash>" (see render.js), so those URLs never change
+        // content and can be cached for a year. Anything requested without a version is re-checked every time.
+        const versioned = /[?&]v=\w+/.test(res.req?.originalUrl ?? '');
+        if (versioned || filePath.endsWith('.woff2')) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         else res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
       },
     }),
