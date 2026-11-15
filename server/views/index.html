@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="{{LANG}}" dir="{{DIR}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>{{t:meta.title}}</title>
+  <meta name="description" content="{{t:meta.description}}">
+  <link rel="canonical" href="{{CANONICAL}}">
+  {{{HREFLANG}}}
+  <meta name="theme-color" content="#FFF6EE" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#120D18" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{APP_NAME}}">
+  <meta property="og:title" content="{{t:meta.title}}">
+  <meta property="og:description" content="{{t:meta.description}}">
+  <meta property="og:url" content="{{CANONICAL}}">
+  <meta property="og:image" content="{{ORIGIN}}/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="{{OG_LOCALE}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest?lang={{LANG}}">
+  <link rel="preload" href="/fonts/bricolage-grotesque-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="modulepreload" href="/js/i18n.js">
+  <link rel="modulepreload" href="/js/prefs.js">
+  <link rel="modulepreload" href="/js/net.js">
+  <link rel="modulepreload" href="/js/ui.js">
+  <link rel="modulepreload" href="/js/home.js">
+  <link rel="modulepreload" href="/js/chat.js">
+  <link rel="modulepreload" href="/js/media.js">
+  <link rel="modulepreload" href="/js/peer.js">
+  <link rel="modulepreload" href="/socket.io/socket.io.esm.min.js">
+  <script type="application/json" id="i18n-data">{{{I18N_JSON}}}</script>
+  <script type="application/json" id="app-config">{{{CONFIG_JSON}}}</script>
+  <script type="module" src="/js/main.js"></script>
+</head>
+<body data-view="home">
+  <a class="skip-link" href="#main">{{t:a11y.skip}}</a>
+
+  <!-- ===================================================== HOME -->
+  <div class="view view-home" id="view-home">
+    <header class="site-header">
+      <a class="brand" href="{{HOME_URL}}">{{{LOGO}}}<span class="brand-name">{{APP_NAME}}</span></a>
+      <div class="header-actions">
+        <span class="online-pill" data-online-pill hidden><span class="live-dot"></span><span data-online-count></span></span>
+        <details class="lang-picker" id="lang-picker">
+          <summary aria-label="{{t:lang.label}}: {{LANG_NAME}}">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-globe"/></svg>
+            <span class="lang-current">{{LANG_NAME}}</span>
+            <svg class="icon icon-sm" aria-hidden="true"><use href="/icons.svg#i-chevron-down"/></svg>
+          </summary>
+          <ul class="lang-menu" role="list">{{{LANG_LINKS}}}</ul>
+        </details>
+      </div>
+    </header>
+
+    <main id="main" class="home-main">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="live-dot"></span>{{t:hero.eyebrow}}</p>
+          <h1 class="hero-title">{{{HERO_TITLE}}}</h1>
+          <p class="hero-subtitle">{{t:hero.subtitle}}</p>
+
+          <form class="start-card" id="start-form" novalidate>
+            <div class="field">
+              <div class="field-head">
+                <label class="field-label" for="interest-input">{{t:interests.label}}</label>
+                <span class="field-optional">{{t:interests.optional}}</span>
+              </div>
+              <div class="tag-input" id="tag-input">
+                <ul class="tag-list" id="tag-list" role="list"></ul>
+                <input id="interest-input" type="text" autocomplete="off" autocapitalize="none" enterkeyhint="done"
+                       maxlength="24" placeholder="{{t:interests.placeholder}}" aria-describedby="interest-hint">
+              </div>
+              <div class="suggestions" id="suggestions">{{{INTEREST_CHIPS}}}</div>
+              <p class="field-hint" id="interest-hint">{{t:interests.hint}}</p>
+            </div>
+
+            <label class="switch-row">
+              <input type="checkbox" class="switch" id="same-language">
+              <span>{{t:filter.sameLanguage}}</span>
+            </label>
+
+            <label class="consent" id="consent-row">
+              <input type="checkbox" class="check" id="consent">
+              <span>{{{CONSENT_HTML}}}</span>
+            </label>
+            <p class="form-error" id="start-error" role="alert" hidden>{{t:consent.required}}</p>
+
+            <div class="start-actions">
+              <button type="submit" class="btn btn-primary btn-xl" id="start-video" data-mode="video">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video"/></svg><span>{{t:start.video}}</span>
+              </button>
+              <button type="button" class="btn btn-secondary btn-xl" id="start-text" data-mode="text">
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-message-circle"/></svg><span>{{t:start.text}}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <div class="orbit">
+            <div class="ring ring-1"></div>
+            <div class="ring ring-2"></div>
+            <div class="ring ring-3"></div>
+            <div class="orbit-track">
+              <span class="node n1"><span class="flag">🇺🇸</span></span>
+              <span class="node n2"><span class="flag">🇵🇭</span></span>
+              <span class="node n3"><span class="flag">🇩🇪</span></span>
+              <span class="node n4"><span class="flag">🇳🇬</span></span>
+              <span class="node n5"><span class="flag">🇻🇳</span></span>
+              <span class="node n6"><span class="flag">🇨🇴</span></span>
+              <span class="node n7"><span class="flag">🇮🇩</span></span>
+              <span class="node n8"><span class="flag">🇬🇧</span></span>
+            </div>
+            <div class="orbit-core">{{{LOGO}}}</div>
+            <span class="bubble b1"><span class="flag">🇧🇷</span><span lang="pt" dir="auto">Oi!</span></span>
+            <span class="bubble b2"><span class="flag">🇯🇵</span><span lang="ja" dir="auto">こんにちは</span></span>
+            <span class="bubble b3"><span class="flag">🇮🇳</span><span lang="hi" dir="auto">नमस्ते</span></span>
+            <span class="bubble b4"><span class="flag">🇲🇽</span><span lang="es" dir="auto">¡Hola!</span></span>
+            <span class="bubble b5"><span class="flag">🇹🇷</span><span lang="tr" dir="auto">Merhaba</span></span>
+            <span class="bubble b6"><span class="flag">🇪🇬</span><span lang="ar" dir="auto">أهلاً</span></span>
+            <span class="bubble b7"><span class="flag">🇰🇪</span><span lang="sw" dir="auto">Jambo!</span></span>
+            <span class="bubble b8"><span class="flag">🇫🇷</span><span lang="fr" dir="auto">Salut&nbsp;!</span></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="features">
+        <article class="feature">
+          <span class="feature-icon tone-orange"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-earth"/></svg></span>
+          <h2>{{t:feature.world.title}}</h2>
+          <p>{{t:feature.world.text}}</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon tone-violet"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-venetian-mask"/></svg></span>
+          <h2>{{t:feature.anon.title}}</h2>
+          <p>{{t:feature.anon.text}}</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon tone-mint"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-shield-check"/></svg></span>
+          <h2>{{t:feature.safe.title}}</h2>
+          <p>{{t:feature.safe.text}}</p>
+        </article>
+        <article class="feature">
+          <span class="feature-icon tone-sun"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-zap"/></svg></span>
+          <h2>{{t:feature.fast.title}}</h2>
+          <p>{{t:feature.fast.text}}</p>
+        </article>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>© {{YEAR}} {{APP_NAME}} · {{t:footer.tagline}}</p>
+      <nav class="footer-links">
+        <a href="/terms">{{t:link.terms}}</a>
+        <a href="/privacy">{{t:link.privacy}}</a>
+        <a href="/guidelines">{{t:link.guidelines}}</a>
+      </nav>
+    </footer>
+  </div>
+
+  <!-- ===================================================== CHAT -->
+  <div class="view view-chat" id="view-chat" hidden>
+    <div class="chat-layout" id="chat-layout" data-state="idle" data-mode="video" data-media="none">
+      <header class="chat-topbar">
+        <button type="button" class="topbar-home" id="chat-home" aria-label="{{t:btn.home}}" title="{{t:btn.home}}">
+          <svg class="icon flip-rtl" aria-hidden="true"><use href="/icons.svg#i-chevron-left"/></svg>
+          <span class="brand brand-sm">{{{LOGO}}}<span class="brand-name">{{APP_NAME}}</span></span>
+        </button>
+        <span class="online-pill online-pill-dark" data-online-pill hidden><span class="live-dot"></span><span data-online-count></span></span>
+      </header>
+
+      <section class="stage" id="stage">
+        <div class="tile tile-remote" id="tile-remote">
+          <video id="remote-video" class="tile-video" autoplay playsinline></video>
+
+          <div class="tile-layer layer-idle">
+            <span class="layer-mark">{{{LOGO}}}</span>
+            <p class="layer-title">{{t:chat.idle}}</p>
+          </div>
+          <div class="tile-layer layer-search">
+            <div class="radar" aria-hidden="true">
+              <span></span><span></span><span></span>
+              <div class="radar-flags" id="radar-flags"></div>
+              <div class="radar-core">{{{LOGO}}}</div>
+            </div>
+            <p class="layer-title">{{t:chat.searching}}</p>
+            <p class="layer-tip" id="search-tip" hidden>{{t:chat.searchingTip}}</p>
+          </div>
+          <div class="tile-layer layer-connecting">
+            <div class="spinner" aria-hidden="true"></div>
+            <p class="layer-title">{{t:chat.connecting}}</p>
+          </div>
+          <div class="tile-layer layer-camoff" id="remote-camoff" hidden>
+            <span class="avatar"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-user-round"/></svg></span>
+            <p>{{t:partner.camOff}}</p>
+          </div>
+          <button type="button" class="reveal-btn" id="reveal-btn" hidden>
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-eye"/></svg><span>{{t:btn.reveal}}</span>
+          </button>
+
+          <div class="partner-chip" id="partner-chip" hidden>
+            <span class="flag" id="partner-flag"></span>
+            <span class="partner-country" id="partner-country"></span>
+            <span class="badge-muted" id="partner-muted" hidden title="{{t:partner.muted}}">
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-mic-off"/></svg><span class="sr-only">{{t:partner.muted}}</span>
+            </span>
+          </div>
+          <div class="tile-actions">
+            <button type="button" class="icon-btn glass" id="report-btn" aria-label="{{t:btn.report}}" title="{{t:btn.report}}" disabled>
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-flag"/></svg>
+            </button>
+          </div>
+          <p class="swipe-hint" id="swipe-hint" hidden>
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-arrow-left"/></svg>{{t:hint.swipe}}
+          </p>
+        </div>
+
+        <div class="tile tile-local" id="tile-local">
+          <video id="local-video" class="tile-video mirrored" autoplay playsinline muted></video>
+          <div class="tile-layer layer-media">
+            <span class="layer-icon"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video"/></svg></span>
+            <p class="layer-title">{{t:media.title}}</p>
+            <p class="layer-text">{{t:media.text}}</p>
+          </div>
+          <div class="tile-layer layer-selfoff" id="local-camoff" hidden>
+            <span class="layer-icon"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video-off"/></svg></span>
+            <p>{{t:self.camOff}}</p>
+          </div>
+          <span class="tile-label">{{t:self.label}}</span>
+        </div>
+      </section>
+
+      <div class="dock">
+        <aside class="chat-panel" id="chat-panel">
+          <div class="panel-head">
+            <span class="flag" id="panel-flag">🌐</span>
+            <span class="panel-country" id="panel-country">{{t:chat.stranger}}</span>
+          </div>
+          <div class="panel-empty" aria-hidden="true">
+            <span class="panel-empty-icon"><svg class="icon"><use href="/icons.svg#i-shield-check"/></svg></span>
+            <p class="panel-empty-title">{{t:feature.safe.title}}</p>
+            <p>{{t:feature.safe.text}}</p>
+          </div>
+          <ol class="messages" id="messages" aria-live="polite" aria-relevant="additions"></ol>
+          <div class="typing" id="typing" hidden>
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>{{t:chat.typing}}</span>
+          </div>
+          <div class="quick-replies" id="quick-replies" hidden>
+            <button type="button" class="chip" data-quick="quick.hi">{{t:quick.hi}}</button>
+            <button type="button" class="chip" data-quick="quick.from">{{t:quick.from}}</button>
+            <button type="button" class="chip" data-quick-text="😂">😂</button>
+            <button type="button" class="chip" data-quick-text="❤️">❤️</button>
+          </div>
+          <form class="composer" id="composer" autocomplete="off">
+            <label class="sr-only" for="message-input">{{t:chat.placeholder}}</label>
+            <input id="message-input" type="text" maxlength="500" placeholder="{{t:chat.placeholder}}" enterkeyhint="send" disabled>
+            <button type="submit" class="icon-btn send-btn" id="send-btn" aria-label="{{t:btn.send}}" title="{{t:btn.send}}" disabled>
+              <svg class="icon flip-rtl" aria-hidden="true"><use href="/icons.svg#i-send-horizontal"/></svg>
+            </button>
+          </form>
+        </aside>
+
+        <nav class="controls" id="controls">
+          <button type="button" class="ctrl ctrl-stop" id="stop-btn" title="{{t:btn.stop}}">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-square"/></svg><span>{{t:btn.stop}}</span>
+          </button>
+          <div class="ctrl-group">
+            <button type="button" class="ctrl-round media-only" id="mic-btn" aria-pressed="false"
+                    aria-label="{{t:btn.micOff}}" title="{{t:btn.micOff}}" data-title-on="{{t:btn.micOn}}" data-title-off="{{t:btn.micOff}}">
+              <svg class="icon icon-on" aria-hidden="true"><use href="/icons.svg#i-mic"/></svg>
+              <svg class="icon icon-off" aria-hidden="true"><use href="/icons.svg#i-mic-off"/></svg>
+            </button>
+            <button type="button" class="ctrl-round media-only" id="cam-btn" aria-pressed="false"
+                    aria-label="{{t:btn.camOff}}" title="{{t:btn.camOff}}" data-title-on="{{t:btn.camOn}}" data-title-off="{{t:btn.camOff}}">
+              <svg class="icon icon-on" aria-hidden="true"><use href="/icons.svg#i-video"/></svg>
+              <svg class="icon icon-off" aria-hidden="true"><use href="/icons.svg#i-video-off"/></svg>
+            </button>
+            <button type="button" class="ctrl-round media-only" id="flip-btn" aria-label="{{t:btn.flip}}" title="{{t:btn.flip}}" hidden>
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-switch-camera"/></svg>
+            </button>
+            <button type="button" class="ctrl-round" id="settings-btn" aria-label="{{t:btn.settings}}" title="{{t:btn.settings}}">
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-settings"/></svg>
+            </button>
+          </div>
+          <button type="button" class="ctrl ctrl-next" id="next-btn">
+            <span class="when-active">{{t:btn.next}}</span>
+            <span class="when-idle">{{t:btn.start}}</span>
+            <kbd>Esc</kbd>
+            <svg class="icon flip-rtl" aria-hidden="true"><use href="/icons.svg#i-arrow-right"/></svg>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================== DIALOGS -->
+  <dialog class="sheet" id="dlg-report" aria-labelledby="report-title">
+    <form method="dialog" class="sheet-body" id="report-form">
+      <header class="sheet-head">
+        <h2 id="report-title">{{t:report.title}}</h2>
+        <button class="icon-btn" value="cancel" formnovalidate aria-label="{{t:btn.cancel}}">
+          <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-x"/></svg>
+        </button>
+      </header>
+      <p class="sheet-text">{{t:report.text}}</p>
+      <fieldset class="reasons">
+        <legend class="sr-only">{{t:report.title}}</legend>
+        <label class="reason"><input type="radio" name="reason" value="nudity" required><span>{{t:report.reason.nudity}}</span></label>
+        <label class="reason"><input type="radio" name="reason" value="minor"><span>{{t:report.reason.minor}}</span></label>
+        <label class="reason"><input type="radio" name="reason" value="harassment"><span>{{t:report.reason.harassment}}</span></label>
+        <label class="reason"><input type="radio" name="reason" value="spam"><span>{{t:report.reason.spam}}</span></label>
+        <label class="reason"><input type="radio" name="reason" value="violence"><span>{{t:report.reason.violence}}</span></label>
+        <label class="reason"><input type="radio" name="reason" value="other"><span>{{t:report.reason.other}}</span></label>
+      </fieldset>
+      <footer class="sheet-foot">
+        <button class="btn btn-ghost" value="cancel" formnovalidate>{{t:btn.cancel}}</button>
+        <button class="btn btn-danger" value="submit">
+          <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-flag"/></svg><span>{{t:report.submit}}</span>
+        </button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="sheet" id="dlg-settings" aria-labelledby="settings-title">
+    <form method="dialog" class="sheet-body">
+      <header class="sheet-head">
+        <h2 id="settings-title">{{t:settings.title}}</h2>
+        <button class="icon-btn" value="done" aria-label="{{t:btn.done}}">
+          <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-x"/></svg>
+        </button>
+      </header>
+      <div class="device-fields" id="device-fields">
+        <label class="field">
+          <span class="field-label">{{t:settings.camera}}</span>
+          <select id="camera-select" class="select"></select>
+        </label>
+        <label class="field">
+          <span class="field-label">{{t:settings.mic}}</span>
+          <select id="mic-select" class="select"></select>
+        </label>
+      </div>
+      <label class="switch-row">
+        <input type="checkbox" class="switch" id="blur-toggle">
+        <span>{{t:settings.blur}}</span>
+      </label>
+      <label class="switch-row">
+        <input type="checkbox" class="switch" id="autonext-toggle">
+        <span>{{t:settings.autoNext}}</span>
+      </label>
+      <footer class="sheet-foot">
+        <button class="btn btn-primary" value="done">{{t:btn.done}}</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="sheet" id="dlg-media" aria-labelledby="media-error-title">
+    <form method="dialog" class="sheet-body sheet-center">
+      <span class="sheet-icon tone-danger"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-video-off"/></svg></span>
+      <h2 id="media-error-title">{{t:media.denied.title}}</h2>
+      <p class="sheet-text" id="media-error-text">{{t:media.denied.text}}</p>
+      <footer class="sheet-foot sheet-foot-stack">
+        <button class="btn btn-primary" value="retry" id="media-retry">
+          <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-refresh-cw"/></svg><span>{{t:media.retry}}</span>
+        </button>
+        <button class="btn btn-secondary" value="text">
+          <svg class="icon" aria-hidden="true"><use href="/icons.svg#i-message-circle"/></svg><span>{{t:media.useText}}</span>
+        </button>
+        <button class="btn btn-ghost" value="home">{{t:btn.home}}</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="sheet" id="dlg-banned" aria-labelledby="banned-title">
+    <form method="dialog" class="sheet-body sheet-center">
+      <span class="sheet-icon tone-danger"><svg class="icon" aria-hidden="true"><use href="/icons.svg#i-ban"/></svg></span>
+      <h2 id="banned-title">{{t:error.banned.title}}</h2>
+      <p class="sheet-text" id="banned-text"></p>
+      <footer class="sheet-foot sheet-foot-stack">
+        <a class="btn btn-secondary" href="/guidelines" target="_blank" rel="noopener">{{t:link.guidelines}}</a>
+        <button class="btn btn-ghost" value="home">{{t:btn.home}}</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <noscript><p class="noscript">{{t:error.noscript}}</p></noscript>
+</body>
+</html>

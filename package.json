@@ -1,0 +1,31 @@
+{
+  "name": "hiyo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Random video and text chat with people from all over the world. WebRTC + Socket.IO, no sign-up.",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test",
+    "test:e2e": "node scripts/e2e.cjs",
+    "screenshots": "node scripts/screenshots.cjs",
+    "gen:images": "node scripts/gen-images.cjs",
+    "gen:geo": "node scripts/gen-geo-data.mjs",
+    "build:sprite": "node scripts/build-sprite.mjs"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "compression": "^1.8.2",
+    "express": "^5.3.0",
+    "proxy-addr": "^2.0.8",
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
+  }
+}
