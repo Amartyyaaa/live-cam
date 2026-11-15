@@ -121,11 +121,15 @@ async function main() {
       assert.equal(await lastTheirMessage(bob), 'Hello from Delhi');
     });
 
-    await step('muting is shown to the partner', async () => {
-      await alice.click('#mic-btn');
-      await bob.waitForSelector('#partner-muted:not([hidden])', { timeout: STEP_TIMEOUT });
-      await alice.click('#mic-btn');
-      await bob.waitForSelector('#partner-muted[hidden]', { state: 'attached', timeout: STEP_TIMEOUT });
+    await step('camera and microphone stay on, Monkey-style (no mute buttons)', async () => {
+      assert.equal(await alice.locator('#mic-btn, #cam-btn').count(), 0);
+      const tracks = () => {
+        const stream = document.getElementById('remote-video').srcObject;
+        return stream ? [stream.getAudioTracks().length, stream.getVideoTracks().length] : [0, 0];
+      };
+      assert.deepEqual(await bob.evaluate(tracks), [1, 1], 'Bob hears and sees Alice');
+      assert.deepEqual(await alice.evaluate(tracks), [1, 1], 'Alice hears and sees Bob');
+      assert.equal(await bob.isVisible('#partner-muted'), false);
     });
 
     await step('Next ends the chat; recent partners are not re-matched', async () => {

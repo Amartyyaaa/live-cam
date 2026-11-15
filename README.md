@@ -23,7 +23,8 @@ Monkey, rebuilt for a worldwide audience with safety, speed and 12 languages fro
 - 🌐 **Cross-language interests**: “Music”, “Música” and “音楽” are the same tag, so people match across languages
 - 🗣️ Optional **“only people who speak my language”** filter
 - 🏳️ Stranger's **country flag** (renders on Windows too) — from Cloudflare/Vercel/CloudFront geo headers or the device time zone
-- 👉 **Swipe to skip** on phones, **Esc** on desktop, auto-find-next, mute / camera off / switch camera, device picker
+- 👉 **Swipe to skip** on phones, **Esc** on desktop, auto-find-next, switch camera, device picker
+- 🎙️ Camera & mic are requested once and stay on during video chat — like Monkey, no mute/camera-off buttons
 - 📱 Mobile-first split-screen layout, desktop layout with picture-in-picture, installable PWA
 
 **Worldwide**

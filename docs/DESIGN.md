@@ -80,7 +80,8 @@ one swipeable row.
 ### Chat room — desktop
 
 Big stranger video with country chip and report flag, your camera picture-in-picture, the conversation on the right,
-and a control bar: **Stop · mic · camera · settings · Next (Esc)**.
+and a control bar: **Stop · switch camera · settings · Next (Esc)**. Like Monkey there are no mute or
+camera-off buttons: the browser asks for camera and microphone once, and they stay on for the whole video chat.
 
 <img src="screenshots/chat-desktop.jpg" alt="Chat room on desktop" width="100%">
 

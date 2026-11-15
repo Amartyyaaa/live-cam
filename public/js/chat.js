@@ -40,8 +40,6 @@ export class Chat {
     this.lastPairId = null;
     this.lastPairAt = 0;
     this.hello = null;
-    this.mic = true;
-    this.cam = true;
     this.blurred = false;
     this.typingSent = false;
     this.resumeOnReconnect = false;
@@ -77,8 +75,6 @@ export class Chat {
       sendBtn: id('send-btn'),
       stopBtn: id('stop-btn'),
       nextBtn: id('next-btn'),
-      micBtn: id('mic-btn'),
-      camBtn: id('cam-btn'),
       flipBtn: id('flip-btn'),
       settingsBtn: id('settings-btn'),
       dlgReport: id('dlg-report'),
@@ -333,16 +329,23 @@ export class Chat {
     return openDialog(dlgMedia);
   }
 
+  // Like Monkey: once permission is granted, camera and microphone simply stay
+  // on for the whole video chat — there are no mute / camera-off buttons.
   #attachLocal() {
     const video = this.el.localVideo;
     video.srcObject = this.stream;
     video.play?.().catch(() => {});
-    for (const track of this.stream.getAudioTracks()) track.enabled = this.mic;
+    for (const track of this.stream.getTracks()) {
+      track.enabled = true;
+      track.onended = () => {
+        // Camera or mic unplugged / taken by another app: tell the partner.
+        this.el.localCamOff.hidden = this.#hasTrack('video');
+        this.#sendMediaState();
+      };
+    }
     const videoTrack = this.stream.getVideoTracks()[0];
-    if (videoTrack) videoTrack.enabled = this.cam;
     video.classList.toggle('mirrored', videoTrack?.getSettings?.().facingMode !== 'environment');
-    this.el.localCamOff.hidden = Boolean(videoTrack && this.cam);
-    this.#renderMediaButtons();
+    this.el.localCamOff.hidden = Boolean(videoTrack);
     listDevices().then(({ cameras }) => {
       this.el.flipBtn.hidden = cameras.length < 2;
     });
@@ -352,41 +355,14 @@ export class Chat {
     return Boolean(this.stream?.getTracks().some((track) => track.kind === kind && track.readyState === 'live'));
   }
 
-  #renderMediaButtons() {
-    for (const [btn, on, kind] of [
-      [this.el.micBtn, this.mic, 'audio'],
-      [this.el.camBtn, this.cam, 'video'],
-    ]) {
-      const available = this.#hasTrack(kind);
-      const off = !on || !available;
-      btn.setAttribute('aria-pressed', String(off));
-      btn.title = off ? btn.dataset.titleOn : btn.dataset.titleOff;
-      btn.disabled = !available;
-    }
-  }
-
-  #toggleMic() {
-    this.mic = !this.mic;
-    for (const track of this.stream?.getAudioTracks() ?? []) track.enabled = this.mic;
-    this.#renderMediaButtons();
-    this.#sendMediaState();
-  }
-
-  #toggleCam() {
-    this.cam = !this.cam;
-    for (const track of this.stream?.getVideoTracks() ?? []) track.enabled = this.cam;
-    this.el.localCamOff.hidden = this.cam && this.#hasTrack('video');
-    this.#renderMediaButtons();
-    this.#sendMediaState();
-  }
-
+  /** Lets the partner know if this device has no working camera or microphone. */
   #sendMediaState() {
     if (!this.pairId || this.mode !== 'video') return;
     this.socket.emit('signal', {
       pairId: this.pairId,
       kind: 'media',
-      audio: this.mic && this.#hasTrack('audio'),
-      video: this.cam && this.#hasTrack('video'),
+      audio: this.#hasTrack('audio'),
+      video: this.#hasTrack('video'),
     });
   }
 
@@ -636,8 +612,6 @@ export class Chat {
     const el = this.el;
     el.nextBtn.addEventListener('click', () => this.next());
     el.stopBtn.addEventListener('click', () => this.stop());
-    el.micBtn.addEventListener('click', () => this.#toggleMic());
-    el.camBtn.addEventListener('click', () => this.#toggleCam());
     el.flipBtn.addEventListener('click', () => this.#flipCamera());
     el.reportBtn.addEventListener('click', () => this.#report());
     el.settingsBtn.addEventListener('click', () => this.#openSettings());
